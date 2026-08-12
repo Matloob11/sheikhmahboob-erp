@@ -2,7 +2,7 @@
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import cint, flt
 
 from di.constants import SRO_REQUIRED_SALE_TYPES
 
@@ -39,6 +39,7 @@ def before_submit(doc, method=None):
 		return
 
 	_validate_di_items(doc)
+	_validate_tax_types(doc)
 
 	if settings.auto_post_on_submit:
 		from di.integrations.di_api import post_invoice
@@ -66,6 +67,31 @@ def _validate_di_items(doc):
 			)
 
 
+def _validate_tax_types(doc):
+	"""Refuse to submit a taxed invoice whose tax rows are not typed for FBR.
+
+	A tax row without di_tax_type is skipped when the payload is built, so the
+	invoice would be filed showing 0% sales tax while ERPNext shows the tax
+	charged. That failure is invisible until someone reconciles with FBR, so it
+	is worth blocking rather than warning.
+	"""
+	untyped = [
+		tax
+		for tax in doc.get("taxes") or []
+		if flt(tax.get("tax_amount")) and not tax.get("di_tax_type")
+	]
+	if not untyped:
+		return
+
+	rows = ", ".join(str(tax.idx) for tax in untyped)
+	frappe.throw(
+		_(
+			"Tax row(s) {0} have no Tax Type. Set it to Sales Tax, Further Tax or Advance Tax, "
+			"otherwise this invoice would be reported to FBR with zero sales tax."
+		).format(rows)
+	)
+
+
 def _populate_di_item_fields(doc):
 	"""Fill missing Sales Invoice Item DI fields from the linked Item."""
 	item_codes = sorted({item.get("item_code") for item in doc.items if item.get("item_code")})
@@ -84,6 +110,7 @@ def _populate_di_item_fields(doc):
 				"sale_type",
 				"sro_item_serial_no",
 				"sro_schedule_no",
+				"fixed_notified_value",
 			],
 		)
 	}
@@ -106,6 +133,8 @@ def _populate_di_item_fields(doc):
 			item.di_sro_serial_no = master.sro_item_serial_no
 		if not item.get("di_schedule_no") and master.get("sro_schedule_no"):
 			item.di_schedule_no = master.sro_schedule_no
+		if not item.get("di_fixed_notified_value") and master.get("fixed_notified_value"):
+			item.di_fixed_notified_value = master.fixed_notified_value
 
 
 def _validate_pos_items(doc):

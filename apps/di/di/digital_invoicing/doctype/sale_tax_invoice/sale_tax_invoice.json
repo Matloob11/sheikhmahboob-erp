@@ -14,6 +14,7 @@
   "fbr_environment",
   "column_break_invoice",
   "fbr_invoice_no",
+  "di_post_attempts",
   "qr_code",
   "qr_code_data",
   "buyer_details_section",
@@ -94,6 +95,15 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "FBR Invoice No",
+   "read_only": 1
+  },
+  {
+   "description": "Counted by the retry scheduler. DI Log cannot be used for this: a failed post throws, and the throw rolls the log entry back.",
+   "fieldname": "di_post_attempts",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "DI Post Attempts",
+   "no_copy": 1,
    "read_only": 1
   },
   {

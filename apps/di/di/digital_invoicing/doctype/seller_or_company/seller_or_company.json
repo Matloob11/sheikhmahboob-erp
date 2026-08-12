@@ -51,13 +51,15 @@
    "fieldtype": "Column Break"
   },
   {
+   "description": "FBR bearer token for the sandbox environment. Stored encrypted.",
    "fieldname": "sandbox_token",
-   "fieldtype": "Data",
+   "fieldtype": "Password",
    "label": "Sandbox Token"
   },
   {
+   "description": "FBR bearer token for the production environment. Stored encrypted.",
    "fieldname": "production_token",
-   "fieldtype": "Data",
+   "fieldtype": "Password",
    "label": "Production Token"
   }
  ],

@@ -175,23 +175,14 @@ doc_events = {
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"di.tasks.all"
-# 	],
-# 	"daily": [
-# 		"di.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"di.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"di.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"di.tasks.monthly"
-# 	],
-# }
+# A failed FBR submission used to stop dead: the invoice stayed submitted with no
+# FBR number, the error sat unread in DI Log, and it was only re-sent if somebody
+# noticed. This picks those up and gives up loudly after five attempts.
+scheduler_events = {
+	"hourly": [
+		"di.tasks.retry_failed_posts",
+	],
+}
 
 # Testing
 # -------

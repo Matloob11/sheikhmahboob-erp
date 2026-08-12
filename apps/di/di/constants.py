@@ -11,6 +11,10 @@ POS_SUCCESS_CODES = {"100", 100}
 REF_BASE_V1 = "https://gw.fbr.gov.pk/pdi/v1"
 REF_BASE_V2 = "https://gw.fbr.gov.pk/pdi/v2"
 
+# FBR's HS_UOM endpoint returns an empty list for every HS code unless an
+# annexure is named. 1 is the sales annexure, which is what sale invoices use.
+DEFAULT_ANNEXURE_ID = 1
+
 STATL_BASE_URL = "https://gw.fbr.gov.pk/dist/v1"
 
 SRO_REQUIRED_SALE_TYPES = [

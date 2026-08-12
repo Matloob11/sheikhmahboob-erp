@@ -7,9 +7,9 @@ SRO schedules, sale type rates) from FBR's PDI API endpoints.
 import frappe
 import requests
 from frappe import _
-from frappe.utils import cstr, getdate, nowdate
+from frappe.utils import cint, cstr, getdate, nowdate
 
-from di.constants import REF_BASE_V1, REF_BASE_V2
+from di.constants import DEFAULT_ANNEXURE_ID, REF_BASE_V1, REF_BASE_V2
 from di.digital_invoicing.doctype.di_log.di_log import create_log
 
 
@@ -81,36 +81,81 @@ def sync_hs_codes(company=None):
 
 
 @frappe.whitelist()
-def sync_hs_code_uoms(company=None):
-	"""Sync HS codes UOMs from FBR API."""
+@frappe.whitelist()
+def fetch_hs_code_uom(hs_code, company=None):
+	"""Fetch the FBR UOM for one HS code and cache it on the HS Code record.
+
+	FBR exposes UOMs one HS code at a time. Walking all 7,800 of them is 7,800
+	sequential requests, which is why the bulk sync was never usable and why
+	every invoice fell back to the ERPNext UOM — a value FBR rejects with error
+	0099. Fetching the single code actually being used costs one request and is
+	remembered afterwards.
+	"""
+	if not hs_code or not frappe.db.exists("HS Code", hs_code):
+		return None
+
+	cached = frappe.db.get_value("HS Code", hs_code, "uom")
+	if cached:
+		return cached
+
 	if not company:
 		company = frappe.defaults.get_global_default("company")
-	if not company:
-		frappe.throw(_("No company specified for HS Code UOM sync"))
 
 	token = _get_token(company)
-	di_settings = frappe.get_doc("DI Settings", company)
-	if not di_settings.annexure_id:
-		frappe.throw(_("Sales Annexure ID is required in DI Settings before syncing HS Code UOMs."))
 
-	for hs_code in frappe.get_list("HS Code", pluck="name"):
-		url = f"{REF_BASE_V2}/HS_UOM"
-		data = _make_get_request(
-			url,
-			token,
-			"HS Code Uoms",
-			params={"hs_code": hs_code, "annexure_id": di_settings.annexure_id},
-		)
-		for item in data:
-			uom = _row_value(item, "description")
-			if not uom:
-				continue
-			_ensure_hs_uom(uom, _row_value(item, "uoM_ID", "uom_id"))
-			doc = frappe.get_doc("HS Code", hs_code)
-			doc.uom = uom
-			doc.save(ignore_permissions=True)
+	# annexure_id is not optional: without it FBR answers 200 with an empty list
+	# for every HS code, which is what made the old sync look like it worked
+	# while filling in nothing. 1 is the sales annexure and is the right default
+	# for sale invoices; DI Settings can override it.
+	annexure_id = None
+	if company:
+		annexure_id = frappe.db.get_value("DI Settings", {"company": company}, "annexure_id")
+	params = {"hs_code": hs_code, "annexure_id": annexure_id or DEFAULT_ANNEXURE_ID}
 
-	return {"message": _("HS Code UOMs synced")}
+	rows = _make_get_request(f"{REF_BASE_V2}/HS_UOM", token, "HS Code Uoms", params=params) or []
+	for item in rows:
+		uom = _row_value(item, "description")
+		if not uom:
+			continue
+		_ensure_hs_uom(uom, _row_value(item, "uoM_ID", "uom_id"))
+		frappe.db.set_value("HS Code", hs_code, "uom", uom, update_modified=False)
+		return uom
+
+	return None
+
+
+@frappe.whitelist()
+def sync_hs_code_uoms(company=None, limit=250):
+	"""Fill in missing HS Code UOMs, newest first, up to `limit` codes.
+
+	Bounded on purpose: this endpoint takes one request per HS code, so an
+	unbounded run means thousands of sequential calls to FBR. Run it repeatedly,
+	or rely on fetch_hs_code_uom filling codes in as they get used.
+	"""
+	if not company:
+		company = frappe.defaults.get_global_default("company")
+
+	pending = frappe.get_all(
+		"HS Code", filters={"uom": ["in", ["", None]]}, pluck="name", limit_page_length=cint(limit)
+	)
+	if not pending:
+		return {"message": _("Every HS Code already has a UOM."), "filled": 0}
+
+	filled = 0
+	for hs_code in pending:
+		try:
+			if fetch_hs_code_uom(hs_code, company=company):
+				filled += 1
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), f"HS Code UOM sync failed for {hs_code}")
+
+	frappe.db.commit()
+	remaining = frappe.db.count("HS Code", {"uom": ["in", ["", None]]})
+	return {
+		"message": _("Filled {0} HS Code UOMs. {1} still missing.").format(filled, remaining),
+		"filled": filled,
+		"remaining": remaining,
+	}
 
 
 @frappe.whitelist()

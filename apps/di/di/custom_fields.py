@@ -122,6 +122,13 @@ def setup_custom_fields():
 				fieldtype="Data",
 				insert_after="sro_item_serial_no",
 			),
+			dict(
+				fieldname="fixed_notified_value",
+				label="Fixed / Notified Value or Retail Price",
+				fieldtype="Currency",
+				insert_after="sro_schedule_no",
+				description="Required by FBR for 3rd Schedule goods. Leave 0 for everything else.",
+			),
 		],
 		"Sales Invoice": [
 			dict(
@@ -171,6 +178,16 @@ def setup_custom_fields():
 				fieldtype="Link",
 				options="Sandbox Scenario",
 				insert_after="di_invoice_type",
+			),
+			dict(
+				fieldname="di_post_attempts",
+				label="DI Post Attempts",
+				fieldtype="Int",
+				insert_after="di_scenario_id",
+				read_only=1,
+				hidden=1,
+				no_copy=1,
+				description="Counted by the retry scheduler. DI Log cannot be used for this: a failed post throws, and the throw rolls the log entry back.",
 			),
 		],
 		"Sales Invoice Item": [
@@ -236,6 +253,15 @@ def setup_custom_fields():
 				insert_after="di_schedule_no",
 				default="0",
 			),
+			dict(
+				fieldname="di_fixed_notified_value",
+				label="Fixed / Notified Value or Retail Price",
+				fieldtype="Currency",
+				insert_after="di_fed_payable",
+				fetch_from="item_code.fixed_notified_value",
+				default="0",
+				description="FBR requires this for 3rd Schedule goods and validates the tax against it.",
+			),
 		],
 		"Purchase Invoice": [
 			dict(
@@ -269,6 +295,15 @@ def setup_custom_fields():
 				fieldtype="Datetime",
 				insert_after="column_break_di_pi",
 				read_only=1,
+			),
+			dict(
+				fieldname="di_post_attempts",
+				label="DI Post Attempts",
+				fieldtype="Int",
+				insert_after="di_posting_datetime",
+				read_only=1,
+				hidden=1,
+				no_copy=1,
 			),
 		],
 		"Purchase Invoice Item": [

@@ -53,7 +53,13 @@ def is_enabled(company):
 
 
 def get_settings(company):
-	"""Get DI Settings document for the given company."""
-	if not frappe.db.exists("DI Settings", {"company": company}):
+	"""Get the DI Settings document for the given company.
+
+	Resolved through the company field rather than by name. The two happen to
+	match today because of how records were created, but nothing enforces it and
+	renaming a company used to break posting.
+	"""
+	name = frappe.db.get_value("DI Settings", {"company": company}, "name")
+	if not name:
 		return None
-	return frappe.get_doc("DI Settings", company)
+	return frappe.get_doc("DI Settings", name)

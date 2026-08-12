@@ -176,7 +176,12 @@ def build_di_payload(doc):
 		invoice_ref_no = frappe.db.get_value(doc.doctype, doc.return_against, "di_integration_id") or ""
 
 	invoice = Invoice(
-		invoiceType=invoice_type if not is_purchase else "Purchase Invoice",
+		# DI accepts only "Sale Invoice" and "Debit Note". The old code sent
+		# "Purchase Invoice" for purchase documents, which FBR rejects outright.
+		# A purchase is reported from the supplier's side — the payload below
+		# already puts the supplier in the seller slot — so it is a sale
+		# invoice, and a purchase return is a debit note just like a sales one.
+		invoiceType=invoice_type,
 		invoiceDate=(
 			doc.posting_date.strftime("%Y-%m-%d")
 			if hasattr(doc.posting_date, "strftime")
@@ -280,15 +285,18 @@ def _handle_success(doc, payload, response, invoice_number, resync):
 
 
 def _handle_error(doc, payload, response):
+	from di.digital_invoicing.doctype.di_log.di_log import explain_error
+
 	error_parts = []
 	vr = response.get("validationResponse", {})
 
 	if vr.get("error"):
-		error_parts.append(vr["error"])
+		error_parts.append(explain_error(vr.get("errorCode"), vr["error"]))
 
 	for item_status in vr.get("invoiceStatuses") or []:
 		if item_status.get("status") != "Valid" and item_status.get("error"):
-			error_parts.append(f"Item {item_status.get('itemSNo', '?')}: {item_status['error']}")
+			detail = explain_error(item_status.get("errorCode"), item_status["error"])
+			error_parts.append(f"Item {item_status.get('itemSNo', '?')}: {detail}")
 
 	error_msg = "\n".join(error_parts) if error_parts else str(response)
 
@@ -310,9 +318,9 @@ def _get_configurations(customer, supplier, company):
 	customer_doc = frappe.get_doc("Customer", customer) if customer else None
 	supplier_doc = frappe.get_doc("Supplier", supplier) if supplier else None
 
-	settings = None
-	if frappe.db.exists("DI Settings", {"company": company}):
-		settings = frappe.get_doc("DI Settings", company)
+	from di.digital_invoicing.doctype.di_settings.di_settings import get_settings
+
+	settings = get_settings(company)
 
 	company_doc = frappe.get_doc("Company", company)
 
@@ -435,8 +443,15 @@ def _build_invoice_items(doc):
 		further_tax_amt = _round_currency(further_tax["amount"])
 		extra_tax_amt = _round_currency(extra_tax["amount"])
 
-		qty_decimal = _as_decimal(qty)
-		fixed_price = _round_currency(_as_decimal(value_excl_st) / qty_decimal) if qty_decimal else 0.0
+		# FBR's fixed/notified value is the price it has notified for the goods,
+		# used to validate tax on 3rd Schedule items. It is not derivable from
+		# the sale: the old code sent net_amount / qty, i.e. the unit selling
+		# rate, which fails validation whenever the two differ. Read the real
+		# figure, and send 0 when none is set — FBR only requires it for the
+		# sale types that carry a notified price.
+		fixed_price = _round_currency(
+			line.get("di_fixed_notified_value") or item_master.get("fixed_notified_value") or 0
+		)
 
 		total_values = _round_currency(
 			_as_decimal(value_excl_st)
@@ -493,6 +508,7 @@ def _get_item_master_di_fields(items):
 				"sale_type",
 				"sro_item_serial_no",
 				"sro_schedule_no",
+				"fixed_notified_value",
 			],
 		)
 	}

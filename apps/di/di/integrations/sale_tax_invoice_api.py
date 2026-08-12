@@ -160,9 +160,10 @@ def _get_seller_token(doc):
 		frappe.throw(_("Seller / Business Name is required for FBR token selection."))
 
 	token_field = "sandbox_token" if _get_environment(doc) == "Sandbox" else "production_token"
-	token = cstr(
-		frappe.db.get_value("Seller Or Company", doc.seller__business_name, token_field) or ""
-	).strip()
+	# These are Password fields, so the table column only holds asterisks.
+	# get_password reads the real value out of the auth table.
+	seller = frappe.get_doc("Seller Or Company", doc.seller__business_name)
+	token = cstr(seller.get_password(token_field, raise_exception=False) or "").strip()
 	if not token:
 		frappe.throw(
 			_("{0} is missing on Seller Or Company {1}.").format(
@@ -216,15 +217,18 @@ def _apply_success(doc, payload, response, invoice_number, resync=False):
 
 
 def _handle_standalone_error(doc, payload, response):
+	from di.digital_invoicing.doctype.di_log.di_log import explain_error
+
 	error_parts = []
 	vr = response.get("validationResponse", {})
 
 	if vr.get("error"):
-		error_parts.append(vr["error"])
+		error_parts.append(explain_error(vr.get("errorCode"), vr["error"]))
 
 	for item_status in vr.get("invoiceStatuses") or []:
 		if item_status.get("status") != "Valid" and item_status.get("error"):
-			error_parts.append(f"Item {item_status.get('itemSNo', '?')}: {item_status['error']}")
+			detail = explain_error(item_status.get("errorCode"), item_status["error"])
+			error_parts.append(f"Item {item_status.get('itemSNo', '?')}: {detail}")
 
 	error_msg = "\n".join(error_parts) if error_parts else str(response)
 	create_log(

@@ -28,6 +28,28 @@ class DILog(Document):
 	pass
 
 
+def explain_error(error_code, error_message=""):
+	"""Add the plain-language meaning of an FBR error code to the message.
+
+	The app ships 46 codes with descriptions in DI Error Code but nothing ever
+	looked them up, so users saw only "0077" and a sentence of FBR wording.
+	"""
+	code = str(error_code or "").strip()
+	if not code:
+		return error_message
+
+	row = frappe.db.get_value("DI Error Code", code, ["message", "description"], as_dict=True)
+	if not row:
+		return error_message
+
+	parts = [p for p in (error_message, row.get("message"), row.get("description")) if p]
+	seen = []
+	for part in parts:
+		if part not in seen:
+			seen.append(part)
+	return "\n".join(seen)
+
+
 def create_log(
 	doctype,
 	docname,
@@ -56,7 +78,7 @@ def create_log(
 			if isinstance(response, dict)
 			else str(response),
 			"error_code": error_code,
-			"error_message": error_message,
+			"error_message": explain_error(error_code, error_message),
 			"fbr_invoice_number": fbr_invoice_number,
 		}
 	).insert(ignore_permissions=True)
