@@ -344,11 +344,39 @@ def _get_configurations(customer, supplier, company):
 	}
 
 
-def _get_taxes(taxes_lines):
-	"""Organize item-wise tax data keyed by di_tax_type."""
-	itemised_tax = {}
+def _get_taxes(doc):
+	"""Organize item-wise tax data keyed by di_tax_type.
 
-	for tax in taxes_lines:
+	ERPNext 16 moved item-wise tax out of the `item_wise_tax_detail` JSON field
+	on each tax row into an `item_wise_tax_details` child table on the parent,
+	linked by child row *names* rather than item codes. Reading the old field on
+	16 returns nothing, so every invoice was reported to FBR with zero sales tax
+	while the invoice itself showed the tax correctly. Both layouts are handled
+	here so the app works either side of that change.
+	"""
+	itemised_tax = {}
+	tax_types = {row.name: (row.get("di_tax_type") or "") for row in doc.taxes}
+
+	detail_rows = doc.get("item_wise_tax_details") or []
+	if detail_rows:
+		item_codes = {row.name: row.get("item_code") for row in doc.items}
+
+		for row in detail_rows:
+			tax_type_key = tax_types.get(row.tax_row)
+			item_code = item_codes.get(row.item_row)
+			if not tax_type_key or not item_code:
+				continue
+
+			bucket = itemised_tax.setdefault(item_code, {})
+			entry = bucket.get(tax_type_key)
+			if entry:
+				entry["amount"] = flt(entry["amount"]) + flt(row.amount)
+			else:
+				bucket[tax_type_key] = {"percentage": flt(row.rate), "amount": flt(row.amount)}
+
+		return itemised_tax
+
+	for tax in doc.taxes:
 		item_tax_map = json.loads(tax.get("item_wise_tax_detail") or "{}")
 		if not item_tax_map:
 			continue
@@ -380,7 +408,7 @@ def _get_taxes(taxes_lines):
 
 def _build_invoice_items(doc):
 	"""Transform invoice line items to FBR DI format."""
-	item_taxes = _get_taxes(doc.taxes)
+	item_taxes = _get_taxes(doc)
 	item_master_data = _get_item_master_di_fields(doc.items)
 	invoice_items = []
 
@@ -395,9 +423,15 @@ def _build_invoice_items(doc):
 		qty = flt(line.get("qty", 0))
 		value_excl_st = _round_currency(line.get("net_amount", 0))
 
-		sales_tax = _round_currency(
-			_as_decimal(value_excl_st) * _as_decimal(gst["percentage"]) / Decimal("100")
-		)
+		# Prefer the amount ERPNext actually charged. Recomputing it from the
+		# percentage drifts from the invoice total once discounts or rounding
+		# are involved, and FBR rejects a mismatch (error 0104).
+		if gst.get("amount"):
+			sales_tax = _round_currency(gst["amount"])
+		else:
+			sales_tax = _round_currency(
+				_as_decimal(value_excl_st) * _as_decimal(gst["percentage"]) / Decimal("100")
+			)
 		further_tax_amt = _round_currency(further_tax["amount"])
 		extra_tax_amt = _round_currency(extra_tax["amount"])
 
