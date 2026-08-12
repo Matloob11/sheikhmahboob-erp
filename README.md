@@ -49,7 +49,6 @@ sheikhmahboob-erp/
     frappe/
     erpnext/
     di/              ← custom business app (edit this most often)
-    di.backup.*/     ← old backup tree; do not deploy blindly
   config/            ← bench-generated nginx/supervisor snippets (reference)
   sites/
     apps.txt

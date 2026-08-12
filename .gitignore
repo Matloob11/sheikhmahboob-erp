@@ -11,8 +11,8 @@ sites/*/locks/
 apps/frappe/
 apps/erpnext/
 
-# Stale pre-split copy of the custom app. Kept on disk as a reference only;
-# see README. Do not deploy it and do not track it.
+# Timestamped copies of the custom app, if one is ever made again. Never deploy
+# or track them.
 apps/di.backup.*/
 
 # Agent permission settings are machine-local and grant broad access.
