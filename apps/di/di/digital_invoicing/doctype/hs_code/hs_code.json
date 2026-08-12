@@ -1,0 +1,81 @@
+{
+ "actions": [],
+ "autoname": "field:hs_code",
+ "creation": "2025-05-15 10:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "short_description",
+  "sr_no",
+  "hs_code",
+  "uom",
+  "description"
+ ],
+ "fields": [
+  {
+   "fieldname": "short_description",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Description",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sr_no",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Sr. No.",
+   "read_only": 1
+  },
+  {
+   "fieldname": "hs_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "HS Code",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "uom",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "UOM",
+   "options": "HS Uom"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Text",
+   "label": "Full Description"
+  }
+ ],
+ "links": [],
+ "modified": "2026-05-16 22:09:30.983981",
+ "modified_by": "Administrator",
+ "module": "Digital Invoicing",
+ "name": "HS Code",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "All"
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "hs_code,short_description,description",
+ "sort_field": "hs_code",
+ "sort_order": "ASC",
+ "states": [],
+ "title_field": "short_description",
+ "track_changes": 1
+}

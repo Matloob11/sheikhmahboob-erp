@@ -1,0 +1,373 @@
+<style>
+	@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+
+	.letter-head,
+	.print-heading {
+		display: none !important;
+	}
+
+	.print-format {
+		padding: 0.55in 0.65in !important;
+	}
+
+	.custom-fbr-invoice {
+		box-sizing: border-box;
+		color: #1a1a1a;
+		font-family: "Inter", Helvetica, Arial, sans-serif;
+		font-size: 10px;
+		line-height: 1.4;
+		margin: 0 auto;
+		max-width: 1200px;
+		padding: 0;
+		width: 100%;
+	}
+
+	.custom-fbr-invoice * {
+		box-sizing: border-box;
+	}
+
+	.custom-fbr-invoice .clearfix::after {
+		clear: both;
+		content: "";
+		display: table;
+	}
+
+	.custom-fbr-invoice .header-section {
+		border-bottom: 3px solid #1e3a8a;
+		margin-bottom: 25px;
+		padding-bottom: 20px;
+		width: 100%;
+	}
+
+	.custom-fbr-invoice .company-block {
+		float: left;
+		margin-top: 15px;
+		width: 55%;
+	}
+
+	.custom-fbr-invoice .company-name {
+		color: #1e3a8a;
+		font-size: 26px;
+		font-weight: 800;
+		letter-spacing: 0.5px;
+		margin: 0;
+		text-transform: uppercase;
+	}
+
+	.custom-fbr-invoice .qr-block {
+		float: right;
+		text-align: right;
+		width: 42%;
+	}
+
+	.custom-fbr-invoice .fbr-logo-wrapper {
+		display: inline-block;
+		margin-right: 20px;
+		text-align: center;
+		vertical-align: middle;
+	}
+
+	.custom-fbr-invoice .fbr-logo-star {
+		color: #f59e0b;
+		font-size: 14px;
+		line-height: 1;
+		margin-bottom: -4px;
+	}
+
+	.custom-fbr-invoice .fbr-logo-top {
+		color: #15803d;
+		font-size: 20px;
+		font-weight: 900;
+		letter-spacing: 1px;
+		line-height: 1;
+		margin-bottom: 3px;
+		text-transform: uppercase;
+	}
+
+	.custom-fbr-invoice .fbr-logo-mid {
+		background-color: #1e40af;
+		border-radius: 3px;
+		color: #ffffff;
+		font-size: 18px;
+		font-weight: 800;
+		letter-spacing: 1.5px;
+		line-height: 1.2;
+		margin: 0 0 3px 0;
+		padding: 4px 14px;
+	}
+
+	.custom-fbr-invoice .fbr-logo-bot {
+		color: #1e40af;
+		font-size: 9px;
+		font-weight: 800;
+		letter-spacing: 0.8px;
+		line-height: 1;
+		text-transform: uppercase;
+	}
+
+	.custom-fbr-invoice .qr-placeholder {
+		background-color: #ffffff;
+		border: 2px solid #e2e8f0;
+		border-radius: 6px;
+		display: inline-block;
+		height: 85px;
+		overflow: hidden;
+		text-align: center;
+		vertical-align: middle;
+		width: 85px;
+	}
+
+	.custom-fbr-invoice .qr-placeholder img,
+	.custom-fbr-invoice .qr-placeholder svg {
+		display: block;
+		height: 100%;
+		object-fit: contain;
+		width: 100%;
+	}
+
+	.custom-fbr-invoice .qr-text {
+		color: #94a3b8;
+		display: table-cell;
+		font-size: 9px;
+		font-weight: 600;
+		height: 85px;
+		vertical-align: middle;
+		width: 85px;
+	}
+
+	.custom-fbr-invoice .info-row {
+		margin-bottom: 30px;
+		width: 100%;
+	}
+
+	.custom-fbr-invoice .info-card {
+		background-color: transparent;
+		border-right: 1px solid #cbd5e1;
+		float: left;
+		margin-right: 2%;
+		min-height: 125px;
+		padding: 0 20px 0 0;
+		width: 32%;
+	}
+
+	.custom-fbr-invoice .info-card.last {
+		border-right: none;
+		margin-right: 0;
+		padding-right: 0;
+	}
+
+	.custom-fbr-invoice .card-title {
+		border-bottom: 1px solid #e2e8f0;
+		color: #0f172a;
+		font-size: 14px;
+		font-weight: 800;
+		margin-bottom: 20px;
+		padding-bottom: 6px;
+	}
+
+	.custom-fbr-invoice .info-field {
+		margin-bottom: 12px;
+	}
+
+	.custom-fbr-invoice .info-field:last-child {
+		margin-bottom: 0;
+	}
+
+	.custom-fbr-invoice .card-label {
+		color: #64748b;
+		display: block;
+		font-size: 9px;
+		font-weight: 600;
+		letter-spacing: 0.5px;
+		margin-bottom: 3px;
+		text-transform: uppercase;
+	}
+
+	.custom-fbr-invoice .card-value {
+		color: #0f172a;
+		display: block;
+		font-size: 11px;
+		font-weight: 700;
+		word-break: break-word;
+	}
+
+	.custom-fbr-invoice .data-table {
+		border-collapse: collapse;
+		margin-bottom: 30px;
+		table-layout: fixed;
+		width: 100%;
+	}
+
+	.custom-fbr-invoice .data-table th,
+	.custom-fbr-invoice .data-table td {
+		word-wrap: break-word;
+	}
+
+	.custom-fbr-invoice .data-table th {
+		background-color: transparent;
+		border: none;
+		border-bottom: 2px solid #cbd5e1;
+		border-top: 1px solid #cbd5e1;
+		color: #0f172a;
+		font-size: 9px;
+		font-weight: 700;
+		letter-spacing: 0.5px;
+		padding: 12px 5px;
+		text-align: center;
+		text-transform: uppercase;
+	}
+
+	.custom-fbr-invoice .data-table td {
+		background-color: transparent;
+		border: none;
+		border-bottom: 1px solid #e2e8f0;
+		color: #0f172a;
+		font-size: 10px;
+		font-weight: 500;
+		padding: 10px 5px;
+		text-align: right;
+		vertical-align: middle;
+	}
+
+	.custom-fbr-invoice .data-table .center {
+		text-align: center;
+	}
+
+	.custom-fbr-invoice .data-table .left {
+		text-align: left;
+	}
+
+	.custom-fbr-invoice .item-name-text {
+		font-weight: 700;
+		text-transform: uppercase;
+	}
+
+	.custom-fbr-invoice .totals-row td {
+		background-color: transparent !important;
+		border: none;
+		border-bottom: 2px solid #e2e8f0;
+		border-top: 2px solid #94a3b8;
+		font-size: 10px;
+		font-weight: 800;
+		padding: 10px 5px;
+	}
+
+	.custom-fbr-invoice .total-label-cell {
+		padding-right: 15px !important;
+		text-align: right !important;
+	}
+</style>
+
+{% set buyer_name = doc.get("buyer__business_name") or doc.get("buyer") or "" %}
+{% set invoice_date = frappe.utils.formatdate(doc.invoice_date, "dd-mm-yyyy") if doc.invoice_date else "" %}
+
+<div class="custom-fbr-invoice">
+	<div class="header-section clearfix">
+		<div class="company-block">
+			<h1 class="company-name">{{ doc.seller__business_name or "" }}</h1>
+		</div>
+		<div class="qr-block">
+			<div class="fbr-logo-wrapper">
+				<div class="fbr-logo-star">&#9733;</div>
+				<div class="fbr-logo-top">FBR</div>
+				<div class="fbr-logo-mid">DIGITAL</div>
+				<div class="fbr-logo-bot">INVOICING SYSTEM</div>
+			</div>
+			<div class="qr-placeholder">
+				{% if doc.qr_code_data %}
+				<img src="{{ doc.qr_code_data }}" alt="QR Code" />
+				{% else %}
+				<span class="qr-text">QR Code</span>
+				{% endif %}
+			</div>
+		</div>
+	</div>
+
+	<div class="info-row clearfix">
+		<div class="info-card">
+			<div class="card-title">Seller Information</div>
+			<div class="info-field">
+				<span class="card-label">Business Name</span>
+				<span class="card-value">{{ doc.seller__business_name or "" }}</span>
+			</div>
+			<div class="info-field">
+				<span class="card-label">Registration No.</span>
+				<span class="card-value">{{ doc.seller_ntncnic or "" }}</span>
+			</div>
+			<div class="info-field">
+				<span class="card-label">Province</span>
+				<span class="card-value">{{ doc.seller_province or "" }}</span>
+			</div>
+		</div>
+
+		<div class="info-card">
+			<div class="card-title">Buyer Information</div>
+			<div class="info-field">
+				<span class="card-label">Business Name</span>
+				<span class="card-value">{{ buyer_name }}</span>
+			</div>
+			<div class="info-field">
+				<span class="card-label">Registration/CNIC No.</span>
+				<span class="card-value">{{ doc.buyer_ntncnic or "" }}</span>
+			</div>
+			<div class="info-field">
+				<span class="card-label">Province</span>
+				<span class="card-value">{{ doc.buyer_province or "" }}</span>
+			</div>
+		</div>
+
+		<div class="info-card last">
+			<div class="card-title">Invoice Summary</div>
+			<div class="info-field">
+				<span class="card-label">FBR Invoice No.</span>
+				<span class="card-value">{{ doc.fbr_invoice_no or "" }}</span>
+			</div>
+			<div class="info-field">
+				<span class="card-label">Invoice Date</span>
+				<span class="card-value">{{ invoice_date }}</span>
+			</div>
+			<div class="info-field">
+				<span class="card-label">Invoice Type</span>
+				<span class="card-value">{{ doc.invoice_type or "" }}</span>
+			</div>
+		</div>
+	</div>
+
+	<table class="data-table">
+		<thead>
+			<tr>
+				<th class="center" style="width: 8%;">No</th>
+				<th class="center" style="width: 32%;">Item Description</th>
+				<th class="center" style="width: 10%;">Qty</th>
+				<th class="center" style="width: 12%;">Rate</th>
+				<th class="center" style="width: 13%;">Total Value</th>
+				<th class="center" style="width: 10%;">Total Tax</th>
+				<th class="center" style="width: 15%;">Total Value with Tax</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for item in doc.invoice_items %}
+			{% set item_tax = (item.sales_tax_applicable or 0) + (item.sales_tax_withheld_at_source or 0) + (item.extra_tax or 0) + (item.further_tax or 0) + (item.fed_payable or 0) %}
+			<tr>
+				<td class="center">{{ item.idx }}</td>
+				<td class="left">
+					<div class="item-name-text">{{ item.description or "" }}</div>
+				</td>
+				<td>{{ frappe.utils.flt(item.quantity or 0, 4) }} {{ item.uom or "" }}</td>
+				<td>{{ frappe.utils.fmt_money(item.sale_rate or 0, currency=None) }}</td>
+				<td>{{ frappe.utils.fmt_money(item.value_sales_excluding_st or 0, currency=None) }}</td>
+				<td>{{ frappe.utils.fmt_money(item_tax, currency=None) }}</td>
+				<td>{{ frappe.utils.fmt_money(item.total_values or 0, currency=None) }}</td>
+			</tr>
+			{% endfor %}
+		</tbody>
+		<tfoot>
+			<tr class="totals-row">
+				<td colspan="4" class="total-label-cell">Total:</td>
+				<td>{{ frappe.utils.fmt_money(doc.total_sales or 0, currency=None) }}</td>
+				<td>{{ frappe.utils.fmt_money(doc.total_taxes or 0, currency=None) }}</td>
+				<td>{{ frappe.utils.fmt_money(doc.total_sales_with_taxes or 0, currency=None) }}</td>
+			</tr>
+		</tfoot>
+	</table>
+</div>

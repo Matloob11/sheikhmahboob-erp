@@ -1,0 +1,97 @@
+{
+ "actions": [],
+ "autoname": "field:seller__business_name",
+ "creation": "2026-05-20 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "seller_details_section",
+  "seller__business_name",
+  "seller_ntncnic",
+  "seller_province",
+  "seller_address",
+  "column_break_seller",
+  "sandbox_token",
+  "production_token"
+ ],
+ "fields": [
+  {
+   "fieldname": "seller_details_section",
+   "fieldtype": "Section Break",
+   "label": "Seller Details"
+  },
+  {
+   "fieldname": "seller__business_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Seller / Business Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "seller_ntncnic",
+   "fieldtype": "Data",
+   "label": "Seller NTN/CNIC"
+  },
+  {
+   "fieldname": "seller_province",
+   "fieldtype": "Select",
+   "label": "Seller Province",
+   "options": "BALOCHISTAN\nAZAD JAMMU AND KASHMIR\nCAPITAL TERRITORY\nKHYBER PAKHTUNKHWA\nPUNJAB\nSINDH\nGILGIT BALTISTAN",
+   "reqd": 1
+  },
+  {
+   "fieldname": "seller_address",
+   "fieldtype": "Long Text",
+   "label": "Seller Address",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_seller",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "sandbox_token",
+   "fieldtype": "Data",
+   "label": "Sandbox Token"
+  },
+  {
+   "fieldname": "production_token",
+   "fieldtype": "Data",
+   "label": "Production Token"
+  }
+ ],
+ "links": [],
+ "modified": "2026-05-20 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Digital Invoicing",
+ "name": "Seller Or Company",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Accounts User"
+  }
+ ],
+ "quick_entry": 1,
+ "row_format": "Dynamic",
+ "search_fields": "seller_ntncnic,seller_province",
+ "sort_field": "seller__business_name",
+ "sort_order": "ASC",
+ "states": [],
+ "title_field": "seller__business_name",
+ "track_changes": 1
+}

@@ -1,0 +1,276 @@
+{
+ "actions": [],
+ "autoname": "format:STI-{####}",
+ "creation": "2026-05-20 00:00:00.000000",
+ "default_print_format": "Sale Tax Invoice",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "amended_from",
+  "invoice_details_section",
+  "invoice_type",
+  "invoice_date",
+  "scenario_id",
+  "fbr_environment",
+  "column_break_invoice",
+  "fbr_invoice_no",
+  "qr_code",
+  "qr_code_data",
+  "buyer_details_section",
+  "buyer",
+  "buyer_registration_type",
+  "buyer_ntncnic",
+  "buyer_address",
+  "buyer_province",
+  "column_break_buyer",
+  "seller__business_name",
+  "seller_ntncnic",
+  "seller_province",
+  "seller_address",
+  "items_section",
+  "invoice_items",
+  "total_values_section",
+  "column_break_totals_a",
+  "column_break_totals_b",
+  "total_sales",
+  "total_taxes",
+  "total_sales_with_taxes"
+ ],
+ "fields": [
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Sale Tax Invoice",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "invoice_details_section",
+   "fieldtype": "Section Break",
+   "label": "Invoice Details"
+  },
+  {
+   "default": "Sale Invoice",
+   "fieldname": "invoice_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Invoice Type",
+   "options": "Sale Invoice",
+   "reqd": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "invoice_date",
+   "fieldtype": "Date",
+   "label": "Posting Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "scenario_id",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Scenario ID",
+   "options": "Scenario",
+   "reqd": 1
+  },
+  {
+   "default": "Sandbox",
+   "fieldname": "fbr_environment",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "FBR Environment",
+   "options": "Sandbox\nProduction",
+   "print_hide": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_invoice",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "fbr_invoice_no",
+   "fieldtype": "Data",
+   "label": "FBR Invoice No",
+   "read_only": 1
+  },
+  {
+   "fieldname": "qr_code",
+   "fieldtype": "HTML",
+   "label": "QR Code"
+  },
+  {
+   "fieldname": "qr_code_data",
+   "fieldtype": "HTML Editor",
+   "hidden": 1,
+   "label": "QR Code Data",
+   "read_only": 1
+  },
+  {
+   "fieldname": "buyer_details_section",
+   "fieldtype": "Section Break",
+   "label": "Buyer and Seller Info"
+  },
+  {
+   "fieldname": "buyer",
+   "fieldtype": "Link",
+   "label": "Buyer / Business Name",
+   "options": "Buyer",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "buyer.buyer_registration_type",
+   "fieldname": "buyer_registration_type",
+   "fieldtype": "Data",
+   "label": "Buyer Registration Type",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "buyer.buyer_ntncnic",
+   "fieldname": "buyer_ntncnic",
+   "fieldtype": "Data",
+   "label": "Buyer NTN/CNIC",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_buyer",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "buyer.buyer_address",
+   "fieldname": "buyer_address",
+   "fieldtype": "Small Text",
+   "label": "Buyer Address",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "buyer.buyer_province",
+   "fieldname": "buyer_province",
+   "fieldtype": "Data",
+   "label": "Buyer Province",
+   "read_only": 1
+  },
+  {
+   "fieldname": "seller_details_section",
+   "fieldtype": "Section Break",
+   "label": "Seller Info"
+  },
+  {
+   "fieldname": "seller__business_name",
+   "fieldtype": "Link",
+   "label": "Seller / Business Name",
+   "options": "Seller Or Company",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "seller__business_name.seller_ntncnic",
+   "fieldname": "seller_ntncnic",
+   "fieldtype": "Data",
+   "label": "Seller NTN/CNIC",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_seller",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "seller__business_name.seller_province",
+   "fieldname": "seller_province",
+   "fieldtype": "Data",
+   "label": "Seller Province",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "seller__business_name.seller_address",
+   "fieldname": "seller_address",
+   "fieldtype": "Small Text",
+   "label": "Seller Address",
+   "read_only": 1
+  },
+  {
+   "fieldname": "items_section",
+   "fieldtype": "Section Break",
+   "label": "Items"
+  },
+  {
+   "fieldname": "invoice_items",
+   "fieldtype": "Table",
+   "label": "Invoice Items",
+   "options": "Sale Tax Invoice Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "total_values_section",
+   "fieldtype": "Section Break",
+   "label": "Total Values"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_sales",
+   "fieldtype": "Currency",
+   "label": "Total Sales",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_totals_a",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_taxes",
+   "fieldtype": "Currency",
+   "label": "Total Taxes",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_totals_b",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_sales_with_taxes",
+   "fieldtype": "Currency",
+   "label": "Total Sales with Taxes",
+   "read_only": 1
+  }
+ ],
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-05-20 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Digital Invoicing",
+ "name": "Sale Tax Invoice",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "Accounts User",
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "scenario_id,buyer,seller__business_name,fbr_invoice_no",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "buyer",
+ "track_changes": 1
+}

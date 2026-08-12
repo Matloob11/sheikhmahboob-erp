@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000" role="img" aria-label="Sheikh Mahboob &amp; Co. Lahore">
+  <title>Sheikh Mahboob &amp; Co. — Lahore</title>
+  <defs>
+    <style>
+      .smc-ring { fill: none; stroke: #868a4a; }
+      .smc-fill { fill: #868a4a; }
+      .smc-text { fill: #868a4a; font-family: Liberation Sans Narrow, Arial Narrow, Helvetica Neue Condensed, Arial, sans-serif; font-weight: 700; }
+    </style>
+  </defs>
+  <circle class="smc-ring" cx="500" cy="500" r="440" stroke-width="14"/>
+  <circle class="smc-ring" cx="500" cy="500" r="330" stroke-width="11"/>
+  <text class="smc-text" font-size="74" x="123.89" y="413.17" text-anchor="middle" dominant-baseline="central" transform="rotate(283.00 123.89 413.17)">S</text>
+  <text class="smc-text" font-size="74" x="140.53" y="359.36" text-anchor="middle" dominant-baseline="central" transform="rotate(291.37 140.53 359.36)">H</text>
+  <text class="smc-text" font-size="74" x="164.83" y="308.54" text-anchor="middle" dominant-baseline="central" transform="rotate(299.74 164.83 308.54)">E</text>
+  <text class="smc-text" font-size="74" x="196.26" y="261.80" text-anchor="middle" dominant-baseline="central" transform="rotate(308.11 196.26 261.80)">I</text>
+  <text class="smc-text" font-size="74" x="234.17" y="220.13" text-anchor="middle" dominant-baseline="central" transform="rotate(316.47 234.17 220.13)">K</text>
+  <text class="smc-text" font-size="74" x="277.73" y="184.42" text-anchor="middle" dominant-baseline="central" transform="rotate(324.84 277.73 184.42)">H</text>
+  <text class="smc-text" font-size="74" x="378.02" y="133.78" text-anchor="middle" dominant-baseline="central" transform="rotate(341.58 378.02 133.78)">M</text>
+  <text class="smc-text" font-size="74" x="432.62" y="119.93" text-anchor="middle" dominant-baseline="central" transform="rotate(349.95 432.62 119.93)">A</text>
+  <text class="smc-text" font-size="74" x="488.66" y="114.17" text-anchor="middle" dominant-baseline="central" transform="rotate(358.32 488.66 114.17)">H</text>
+  <text class="smc-text" font-size="74" x="544.93" y="116.62" text-anchor="middle" dominant-baseline="central" transform="rotate(366.68 544.93 116.62)">B</text>
+  <text class="smc-text" font-size="74" x="600.25" y="127.24" text-anchor="middle" dominant-baseline="central" transform="rotate(375.05 600.25 127.24)">O</text>
+  <text class="smc-text" font-size="74" x="653.43" y="145.80" text-anchor="middle" dominant-baseline="central" transform="rotate(383.42 653.43 145.80)">O</text>
+  <text class="smc-text" font-size="74" x="703.34" y="171.90" text-anchor="middle" dominant-baseline="central" transform="rotate(391.79 703.34 171.90)">B</text>
+  <text class="smc-text" font-size="74" x="789.21" y="244.36" text-anchor="middle" dominant-baseline="central" transform="rotate(408.53 789.21 244.36)">&amp;</text>
+  <text class="smc-text" font-size="74" x="850.58" y="338.48" text-anchor="middle" dominant-baseline="central" transform="rotate(425.26 850.58 338.48)">C</text>
+  <text class="smc-text" font-size="74" x="870.36" y="391.22" text-anchor="middle" dominant-baseline="central" transform="rotate(433.63 870.36 391.22)">O</text>
+  <text class="smc-text" font-size="74" x="882.24" y="446.28" text-anchor="middle" dominant-baseline="central" transform="rotate(442.00 882.24 446.28)">.</text>
+  <text class="smc-text" font-size="74" x="278.60" y="816.19" text-anchor="middle" dominant-baseline="central" transform="rotate(35.00 278.60 816.19)">L</text>
+  <text class="smc-text" font-size="74" x="361.67" y="860.36" text-anchor="middle" dominant-baseline="central" transform="rotate(21.00 361.67 860.36)">A</text>
+  <text class="smc-text" font-size="74" x="452.96" y="883.12" text-anchor="middle" dominant-baseline="central" transform="rotate(7.00 452.96 883.12)">H</text>
+  <text class="smc-text" font-size="74" x="547.04" y="883.12" text-anchor="middle" dominant-baseline="central" transform="rotate(-7.00 547.04 883.12)">O</text>
+  <text class="smc-text" font-size="74" x="638.33" y="860.36" text-anchor="middle" dominant-baseline="central" transform="rotate(-21.00 638.33 860.36)">R</text>
+  <text class="smc-text" font-size="74" x="721.40" y="816.19" text-anchor="middle" dominant-baseline="central" transform="rotate(-35.00 721.40 816.19)">E</text>
+  <polygon class="smc-fill" points="137.28,602.02 144.63,621.91 165.81,622.75 149.17,635.88 154.91,656.29 137.28,644.52 119.65,656.29 125.39,635.88 108.75,622.75 129.93,621.91"/>
+  <polygon class="smc-fill" points="862.72,602.02 870.07,621.91 891.25,622.75 874.61,635.88 880.35,656.29 862.72,644.52 845.09,656.29 850.83,635.88 834.19,622.75 855.37,621.91"/>
+  <text class="smc-text" x="500" y="500" font-size="300" text-anchor="middle" dominant-baseline="central" textLength="470" lengthAdjust="spacingAndGlyphs">SMC</text>
+</svg>

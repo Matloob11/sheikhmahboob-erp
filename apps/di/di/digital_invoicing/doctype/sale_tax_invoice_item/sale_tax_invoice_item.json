@@ -1,0 +1,201 @@
+{
+ "actions": [],
+ "creation": "2026-05-20 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "description",
+  "uom",
+  "column_break_item_a",
+  "hs_code",
+  "rate_in_percentage",
+  "tax_rate_value",
+  "section_break_item_values",
+  "quantity",
+  "column_break_item_b",
+  "sale_rate",
+  "column_break_item_c",
+  "value_sales_excluding_st",
+  "column_break_item_d",
+  "total_values",
+  "section_break_item_taxes",
+  "sales_tax_applicable",
+  "fixed_notified_value_or_retail_price",
+  "sales_tax_withheld_at_source",
+  "extra_tax",
+  "further_tax",
+  "sro_schedule_no",
+  "fed_payable",
+  "discount",
+  "sale_type",
+  "sro_item_serial_no"
+ ],
+ "fields": [
+  {
+   "fieldname": "description",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Description",
+   "options": "Tax Item",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "description.product_uom",
+   "fieldname": "uom",
+   "fieldtype": "Data",
+   "label": "UOM",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_item_a",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "description.hs_code",
+   "fieldname": "hs_code",
+   "fieldtype": "Data",
+   "label": "HS Code",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fetch_from": "description.tax_desc",
+   "fieldname": "rate_in_percentage",
+   "fieldtype": "Data",
+   "label": "Rate Description"
+  },
+  {
+   "fetch_from": "description.rate_in_p",
+   "fieldname": "tax_rate_value",
+   "fieldtype": "Float",
+   "label": "Rate Percentage"
+  },
+  {
+   "fieldname": "section_break_item_values",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "quantity",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Quantity",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_item_b",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "sale_rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Sale Rate",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_item_c",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "value_sales_excluding_st",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Value Sales Excluding ST",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_item_d",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_values",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Total Values",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_item_taxes",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "sales_tax_applicable",
+   "fieldtype": "Currency",
+   "label": "Sales Tax Applicable",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "description.fixed_rs",
+   "fieldname": "fixed_notified_value_or_retail_price",
+   "fieldtype": "Float",
+   "label": "Fixed Notified Value Or Retail Price"
+  },
+  {
+   "default": "0",
+   "fieldname": "sales_tax_withheld_at_source",
+   "fieldtype": "Currency",
+   "label": "Sales Tax Withheld At Source"
+  },
+  {
+   "default": "0",
+   "fieldname": "extra_tax",
+   "fieldtype": "Currency",
+   "label": "Extra Tax"
+  },
+  {
+   "default": "0",
+   "fieldname": "further_tax",
+   "fieldtype": "Currency",
+   "label": "Further Tax"
+  },
+  {
+   "fieldname": "sro_schedule_no",
+   "fieldtype": "Data",
+   "label": "SRO Schedule No"
+  },
+  {
+   "default": "0",
+   "fieldname": "fed_payable",
+   "fieldtype": "Currency",
+   "label": "Fed Payable"
+  },
+  {
+   "default": "0",
+   "fieldname": "discount",
+   "fieldtype": "Currency",
+   "label": "Discount"
+  },
+  {
+   "fieldname": "sale_type",
+   "fieldtype": "Data",
+   "label": "Sale Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sro_item_serial_no",
+   "fieldtype": "Data",
+   "label": "SRO Item Serial No"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-05-20 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Digital Invoicing",
+ "name": "Sale Tax Invoice Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

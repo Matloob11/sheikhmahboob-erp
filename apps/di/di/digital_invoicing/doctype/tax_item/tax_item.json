@@ -1,0 +1,120 @@
+{
+ "actions": [],
+ "autoname": "field:product_description",
+ "creation": "2026-05-20 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "product_details_section",
+  "hs_code",
+  "product_description",
+  "product_uom",
+  "section_break_tax_rate",
+  "transaction_type",
+  "tax_desc",
+  "column_break_tax_rate",
+  "rate_in_p",
+  "rate_id",
+  "fixed_rs"
+ ],
+ "fields": [
+  {
+   "fieldname": "product_details_section",
+   "fieldtype": "Section Break",
+   "label": "Product Details"
+  },
+  {
+   "fieldname": "hs_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "HS Code",
+   "options": "HS Code",
+   "reqd": 1
+  },
+  {
+   "fieldname": "product_description",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Product Description",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "product_uom",
+   "fieldtype": "Data",
+   "label": "Product UOM",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_tax_rate",
+   "fieldtype": "Section Break",
+   "label": "Tax Rate Details"
+  },
+  {
+   "fieldname": "transaction_type",
+   "fieldtype": "Link",
+   "label": "Sale Type / Transaction Type",
+   "options": "Transaction Type"
+  },
+  {
+   "fieldname": "tax_desc",
+   "fieldtype": "Data",
+   "label": "Tax Rate",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_tax_rate",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "rate_in_p",
+   "fieldtype": "Float",
+   "label": "Rate Percentage",
+   "reqd": 1
+  },
+  {
+   "fieldname": "rate_id",
+   "fieldtype": "Int",
+   "label": "FBR Rate ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "fixed_rs",
+   "fieldtype": "Float",
+   "label": "Fixed Rs. Per UOM"
+  }
+ ],
+ "links": [],
+ "modified": "2026-05-20 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Digital Invoicing",
+ "name": "Tax Item",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "All"
+  }
+ ],
+ "quick_entry": 1,
+ "row_format": "Dynamic",
+ "search_fields": "hs_code,product_uom,tax_desc",
+ "sort_field": "product_description",
+ "sort_order": "ASC",
+ "states": [],
+ "title_field": "product_description",
+ "track_changes": 1
+}

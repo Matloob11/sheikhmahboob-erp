@@ -1,0 +1,17 @@
+# Everything in this repo is deployed to Linux. A shell script checked out with
+# CRLF fails there with "bad interpreter", so keep line endings LF regardless of
+# the platform doing the checkout.
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.py   text eol=lf
+*.js   text eol=lf
+*.json text eol=lf
+*.svg  text eol=lf
+*.html text eol=lf
+*.md   text eol=lf
+
+*.png binary
+*.gz  binary
+*.whl binary
+*.tar binary

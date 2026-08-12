@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000" role="img" aria-label="SMC">
+  <title>SMC</title>
+  <defs>
+    <style>
+      .smc-ring { fill: none; stroke: #868a4a; }
+      .smc-fill { fill: #868a4a; }
+      .smc-text { fill: #868a4a; font-family: Liberation Sans Narrow, Arial Narrow, Helvetica Neue Condensed, Arial, sans-serif; font-weight: 700; }
+    </style>
+  </defs>
+  <circle class="smc-ring" cx="500" cy="500" r="455" stroke-width="46"/>
+  <circle class="smc-ring" cx="500" cy="500" r="370" stroke-width="26"/>
+  <text class="smc-text" x="500" y="500" font-size="400" text-anchor="middle" dominant-baseline="central" textLength="560" lengthAdjust="spacingAndGlyphs">SMC</text>
+</svg>

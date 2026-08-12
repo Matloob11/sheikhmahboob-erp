@@ -1,0 +1,30 @@
+# Never commit secrets.
+.env
+*.sql
+*.sql.gz
+sites/*/site_config.json
+sites/*/private/
+sites/*/locks/
+
+# Upstream apps carry their own .git and are pulled with bench, not tracked here.
+# Only apps/di — the code we actually write — belongs in this repo.
+apps/frappe/
+apps/erpnext/
+
+# Stale pre-split copy of the custom app. Kept on disk as a reference only;
+# see README. Do not deploy it and do not track it.
+apps/di.backup.*/
+
+# Agent permission settings are machine-local and grant broad access.
+.claude/
+
+# Build and runtime artifacts
+**/__pycache__/
+**/*.pyc
+**/node_modules/
+**/.ruff_cache/
+apps/di/dist/
+config/pids/
+config/scheduler_process
+*.tgz
+*.tar
