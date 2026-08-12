@@ -8,7 +8,6 @@ import re
 from dataclasses import dataclass
 
 import frappe
-import requests
 from frappe import _
 from frappe.utils import cint, cstr, flt, now_datetime
 
@@ -28,6 +27,7 @@ from di.constants import (
 	POS_SUCCESS_CODES,
 )
 from di.digital_invoicing.doctype.di_log.di_log import create_log
+from di.integrations.http import post as fbr_post
 
 _NTN_PATTERN = re.compile(r"^\d{7}-?\d$")
 _CNIC_PATTERN = re.compile(r"^\d{5}-?\d{7}-?\d$")
@@ -232,33 +232,11 @@ def _build_payload(doc, settings):
 
 def _post_invoice(doc, payload, settings):
 	"""POST the fiscal payload to FBR."""
-	headers = {
-		"Authorization": f"Bearer {settings.bearer_token}",
-		"Accept": "application/json",
-		"Content-Type": "application/json",
-	}
-
-	response = requests.post(
-		settings.api_url,
-		json=payload,
-		headers=headers,
-		timeout=30,
-	)
-
-	try:
-		response_data = response.json()
-		if not isinstance(response_data, dict):
-			response_data = {"data": response_data}
-	except ValueError:
-		response_data = {"message": response.text}
-
-	if response.status_code >= 400:
-		message = cstr(
-			_extract_value(response_data, "Response", "Message", "message", default=response.text)
-		).strip()
-		if response.status_code in {401, 403}:
-			message = message or _("FBR rejected the request. Check your bearer token.")
-		raise POSFiscalError(message or _("FBR rejected the invoice request."))
+	# Shared layer so a lost reply is reported as uncertain rather than as a
+	# plain failure — a fiscalised POS sale must never be sent twice.
+	response_data = fbr_post(settings.api_url, settings.bearer_token, payload, "POS fiscalisation")
+	if not isinstance(response_data, dict):
+		response_data = {"data": response_data}
 
 	return response_data
 

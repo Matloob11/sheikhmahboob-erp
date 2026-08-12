@@ -581,17 +581,12 @@ def _get_seller_province(company):
 
 def _make_get_request(url, token, data_type, params=None):
 	"""Make an authenticated GET request to the FBR reference API."""
+	from di.integrations.http import FBRError
+	from di.integrations.http import get as fbr_get
+
 	try:
-		response = requests.get(
-			url,
-			params=params,
-			headers={
-				"Authorization": f"Bearer {token}",
-				"Accept": "application/json",
-			},
-			timeout=30,
-		)
-	except requests.RequestException as e:
+		data = fbr_get(url, token, data_type, params=params)
+	except FBRError as e:
 		create_log(
 			"DI Settings",
 			"",
@@ -601,17 +596,7 @@ def _make_get_request(url, token, data_type, params=None):
 			api_type="Reference",
 			title=f"Reference Sync Error: {data_type}",
 		)
-		frappe.throw(_("FBR reference API request failed for {0}: {1}").format(data_type, str(e)))
-
-	if response.status_code == 401:
-		frappe.throw(_("FBR API returned 401 Unauthorized. Check your access token."))
-	if response.status_code >= 400:
-		frappe.throw(_("FBR reference API returned {0} for {1}").format(response.status_code, data_type))
-
-	try:
-		data = response.json()
-	except ValueError:
-		frappe.throw(_("Invalid JSON response from FBR for {0}").format(data_type))
+		raise
 
 	if isinstance(data, dict):
 		for key in ("data", "result", "results", "items"):

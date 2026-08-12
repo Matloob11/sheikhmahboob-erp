@@ -175,12 +175,13 @@ doc_events = {
 # Scheduled Tasks
 # ---------------
 
-# A failed FBR submission used to stop dead: the invoice stayed submitted with no
-# FBR number, the error sat unread in DI Log, and it was only re-sent if somebody
-# noticed. This picks those up and gives up loudly after five attempts.
+# Reports submitted invoices that never got an FBR number. It does not re-send
+# them: after a lost reply we cannot tell whether FBR already holds the invoice,
+# and filing the same sale twice cannot be undone. Connection failures — the one
+# case where nothing was sent — are retried inside di.integrations.http instead.
 scheduler_events = {
 	"hourly": [
-		"di.tasks.retry_failed_posts",
+		"di.tasks.alert_unposted_invoices",
 	],
 }
 

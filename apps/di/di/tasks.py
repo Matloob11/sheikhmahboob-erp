@@ -1,26 +1,36 @@
 """Scheduled work for Digital Invoicing.
 
-Before this existed a failed FBR submission simply stopped. The invoice stayed
-submitted in ERPNext with no FBR number, and it was only re-sent if somebody
-happened to notice.
+This job used to re-post automatically. It no longer does, and that is
+deliberate.
 
-Attempts are counted in a field on the document rather than by counting DI Log
-rows. A failed post calls frappe.throw, the throw rolls the transaction back, and
-the log entry written moments earlier goes with it — so DI Log cannot be trusted
-to say how many times we have tried.
+Once an invoice has been sent once, we cannot prove it was not filed. A read
+timeout or a 5xx means the request reached FBR and only the answer was lost —
+FBR may hold the invoice while `di_integration_id` here stays empty. Sending it
+again then files the same sale twice against a real tax identity, and an FBR
+submission cannot be withdrawn. The payload carries no client reference, so FBR
+cannot deduplicate it either.
+
+Retrying is therefore safe only where we know the request never left, and that
+case is already handled inside di.integrations.http, which retries connection
+failures immediately and never retries a read.
+
+What is left for a scheduler is the part that was actually missing: noticing.
+A submitted invoice with no FBR number is reported to the accounts team so a
+person can look at DI Log and press Post to FBR. That is a decision with legal
+weight, and it belongs to a person.
 """
 
 import frappe
 from frappe import _
 from frappe.utils import add_days, cint, today
 
-# Give up after this many attempts. A permanently bad invoice — wrong NTN,
-# missing HS code — must not be retried forever.
-MAX_ATTEMPTS = 5
+# Below this many days an invoice is still "today's problem" and the person who
+# raised it is likely to fix it themselves; the alert would be noise.
+QUIET_HOURS = 2
 
-# An invoice that has been failing for a fortnight needs a person, not another
-# retry.
-LOOKBACK_DAYS = 14
+# Older than this and an alert helps nobody — it needs a conversation, not a
+# notification.
+LOOKBACK_DAYS = 30
 
 ALERT_ROLES = ("Accounts Manager", "System Manager")
 
@@ -31,38 +41,28 @@ TARGETS = (
 )
 
 
-def retry_failed_posts():
-	"""Re-post submitted invoices that never received an FBR invoice number."""
+def alert_unposted_invoices():
+	"""Report submitted invoices that never received an FBR invoice number."""
 	cutoff = add_days(today(), -LOOKBACK_DAYS)
-	retried = 0
-	recovered = 0
-	exhausted = 0
+	found = 0
+	alerted = 0
 
 	for doctype, posted_field, date_field in TARGETS:
 		for name in _pending(doctype, posted_field, date_field, cutoff):
-			attempts = cint(frappe.db.get_value(doctype, name, "di_post_attempts"))
-			if attempts >= MAX_ATTEMPTS:
-				continue
+			found += 1
+			if _alert(doctype, name):
+				alerted += 1
 
-			retried += 1
-			try:
-				_repost(doctype, name)
-				frappe.db.commit()
-				if frappe.db.get_value(doctype, name, posted_field):
-					recovered += 1
-			except Exception:
-				frappe.db.rollback()
-				attempts += 1
-				# Written after the rollback so the count survives.
-				frappe.db.set_value(
-					doctype, name, "di_post_attempts", attempts, update_modified=False
-				)
-				frappe.db.commit()
-				if attempts >= MAX_ATTEMPTS:
-					exhausted += 1
-					_alert_exhausted(doctype, name, attempts)
+	if alerted:
+		frappe.db.commit()
 
-	return {"retried": retried, "recovered": recovered, "exhausted": exhausted}
+	return {"unposted": found, "alerted": alerted}
+
+
+# Kept so an existing scheduler entry or a manual call does not break, and so it
+# is obvious why it no longer posts anything.
+def retry_failed_posts():
+	return alert_unposted_invoices()
 
 
 def _pending(doctype, posted_field, date_field, cutoff):
@@ -70,7 +70,7 @@ def _pending(doctype, posted_field, date_field, cutoff):
 		return []
 
 	meta = frappe.get_meta(doctype)
-	if not (meta.has_field(posted_field) and meta.has_field("di_post_attempts")):
+	if not meta.has_field(posted_field):
 		return []
 
 	return frappe.get_all(
@@ -79,36 +79,27 @@ def _pending(doctype, posted_field, date_field, cutoff):
 			"docstatus": 1,
 			posted_field: ["in", ["", None]],
 			date_field: [">=", cutoff],
+			"modified": ["<", frappe.utils.add_to_date(None, hours=-QUIET_HOURS)],
 		},
 		pluck="name",
 		limit_page_length=0,
 	)
 
 
-def _repost(doctype, name):
-	doc = frappe.get_doc(doctype, name)
-
-	if doctype == "Sale Tax Invoice":
-		from di.integrations.sale_tax_invoice_api import post_sale_tax_invoice
-
-		post_sale_tax_invoice(doc, resync=True)
-		return
-
-	from di.integrations.di_api import post_invoice
-
-	post_invoice(doc, resync=True)
-
-
-def _alert_exhausted(doctype, name, attempts):
-	"""Tell the accounts team once, when we stop trying."""
-	subject = _("FBR submission gave up on {0} {1}").format(doctype, name)
-	if frappe.db.exists("Notification Log", {"document_type": doctype, "document_name": name, "subject": subject}):
-		return
+def _alert(doctype, name):
+	"""Notify once per document. Returns True if a notification was created."""
+	subject = _("Not filed with FBR: {0} {1}").format(doctype, name)
+	if frappe.db.exists(
+		"Notification Log", {"document_type": doctype, "document_name": name, "subject": subject}
+	):
+		return False
 
 	message = _(
-		"{0} {1} is submitted but still has no FBR invoice number after {2} attempts. "
-		"Open it and check DI Log for the error FBR reported."
-	).format(doctype, name, attempts)
+		"{0} {1} is submitted but has no FBR invoice number. Open DI Log to see what FBR "
+		"reported, then use Post to FBR once the cause is fixed.<br><br>"
+		"It is not re-sent automatically: if the earlier attempt timed out, FBR may already "
+		"hold this invoice, and filing it twice cannot be undone."
+	).format(doctype, name)
 
 	for user in _alert_recipients():
 		frappe.get_doc(
@@ -123,7 +114,7 @@ def _alert_exhausted(doctype, name, attempts):
 			}
 		).insert(ignore_permissions=True)
 
-	frappe.db.commit()
+	return True
 
 
 def _alert_recipients():
@@ -142,5 +133,13 @@ def _alert_recipients():
 		pluck="name",
 		limit_page_length=0,
 	)
-	recipients = [u for u in enabled if u not in ("Guest",)]
+	recipients = [u for u in enabled if u != "Guest"]
 	return recipients or ["Administrator"]
+
+
+def count_unposted():
+	"""Small helper for dashboards and tests."""
+	cutoff = add_days(today(), -LOOKBACK_DAYS)
+	return cint(
+		sum(len(_pending(dt, posted, date_field, cutoff)) for dt, posted, date_field in TARGETS)
+	)

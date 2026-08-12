@@ -6,3 +6,4 @@
 # Patches added in this section will be executed after doctypes are migrated
 di.patches.seed_hs_codes
 di.patches.move_seller_tokens_to_password
+di.patches.drop_di_post_attempts

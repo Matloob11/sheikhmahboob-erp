@@ -179,16 +179,6 @@ def setup_custom_fields():
 				options="Sandbox Scenario",
 				insert_after="di_invoice_type",
 			),
-			dict(
-				fieldname="di_post_attempts",
-				label="DI Post Attempts",
-				fieldtype="Int",
-				insert_after="di_scenario_id",
-				read_only=1,
-				hidden=1,
-				no_copy=1,
-				description="Counted by the retry scheduler. DI Log cannot be used for this: a failed post throws, and the throw rolls the log entry back.",
-			),
 		],
 		"Sales Invoice Item": [
 			dict(
@@ -295,15 +285,6 @@ def setup_custom_fields():
 				fieldtype="Datetime",
 				insert_after="column_break_di_pi",
 				read_only=1,
-			),
-			dict(
-				fieldname="di_post_attempts",
-				label="DI Post Attempts",
-				fieldtype="Int",
-				insert_after="di_posting_datetime",
-				read_only=1,
-				hidden=1,
-				no_copy=1,
 			),
 		],
 		"Purchase Invoice Item": [

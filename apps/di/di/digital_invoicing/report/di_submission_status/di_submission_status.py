@@ -32,7 +32,6 @@ def _columns():
 		{"label": _("Party"), "fieldname": "party", "fieldtype": "Data", "width": 200},
 		{"label": _("Amount"), "fieldname": "amount", "fieldtype": "Currency", "width": 130},
 		{"label": _("FBR Invoice No"), "fieldname": "fbr_invoice_no", "fieldtype": "Data", "width": 240},
-		{"label": _("Attempts"), "fieldname": "attempts", "fieldtype": "Int", "width": 80},
 		{"label": _("Status"), "fieldname": "status", "fieldtype": "Data", "width": 110},
 	]
 
@@ -75,9 +74,6 @@ def _collect(doctype, posted_field, date_field, party_field, amount_field, filte
 		conditions[posted_field] = ["in", ["", None]]
 
 	fields = ["name", date_field, party_field, amount_field, posted_field]
-	if meta.has_field("di_post_attempts"):
-		fields.append("di_post_attempts")
-
 	# get_list, not get_all: this one honours User Permissions.
 	records = frappe.get_list(
 		doctype, filters=conditions, fields=fields, limit_page_length=0, ignore_permissions=False
@@ -94,7 +90,6 @@ def _collect(doctype, posted_field, date_field, party_field, amount_field, filte
 				"party": record.get(party_field),
 				"amount": record.get(amount_field),
 				"fbr_invoice_no": posted or "",
-				"attempts": record.get("di_post_attempts") or 0,
 				"status": STATUS_POSTED if posted else STATUS_PENDING,
 			}
 		)

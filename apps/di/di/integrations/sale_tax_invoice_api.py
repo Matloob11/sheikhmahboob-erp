@@ -50,7 +50,8 @@ def post_sale_tax_invoice(doc, resync=False):
 			api_type="DI Post",
 			title=f"Sale Tax Invoice Post Error: {doc.name}",
 		)
-		frappe.throw(_("FBR DI API request failed: {0}").format(str(e)))
+		# Keep the error type: it says whether this may be sent again.
+		raise
 
 	invoice_number = cstr(response.get("invoiceNumber") or "").strip()
 	if not invoice_number:
@@ -78,7 +79,7 @@ def validate_sale_tax_invoice(doc):
 			api_type="DI Validate",
 			title=f"Sale Tax Invoice Validate Error: {doc.name}",
 		)
-		frappe.throw(_("FBR DI validation request failed: {0}").format(str(e)))
+		raise
 
 	create_log(
 		doc.doctype,

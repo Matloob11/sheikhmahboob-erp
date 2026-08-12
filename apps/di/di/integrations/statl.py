@@ -4,12 +4,13 @@ Verifies buyer/seller registration status with FBR.
 """
 
 import frappe
-import requests
 from frappe import _
 from frappe.utils import cstr, today
 
 from di.constants import STATL_BASE_URL
 from di.digital_invoicing.doctype.di_log.di_log import create_log
+from di.integrations.http import FBRError
+from di.integrations.http import post as fbr_post
 
 
 @frappe.whitelist()
@@ -32,17 +33,8 @@ def check_status(registration_no, date=None, company=None):
 	}
 
 	try:
-		response = requests.post(
-			url,
-			json=payload,
-			headers={
-				"Authorization": f"Bearer {token}",
-				"Content-Type": "application/json",
-				"Accept": "application/json",
-			},
-			timeout=30,
-		)
-	except requests.RequestException as e:
+		result = fbr_post(url, token, payload, "STATL check")
+	except FBRError as e:
 		create_log(
 			"Customer",
 			"",
@@ -52,22 +44,14 @@ def check_status(registration_no, date=None, company=None):
 			api_type="STATL",
 			title=f"STATL Error: {registration_no}",
 		)
-		frappe.throw(_("STATL API request failed: {0}").format(str(e)))
-
-	if response.status_code == 401:
-		frappe.throw(_("FBR STATL API returned 401 Unauthorized. Check your access token."))
-
-	try:
-		result = response.json()
-	except ValueError:
-		frappe.throw(_("Invalid response from STATL API"))
+		raise
 
 	create_log(
 		"Customer",
 		"",
 		payload,
 		result,
-		status="Success" if response.status_code == 200 else "Error",
+		status="Success",
 		api_type="STATL",
 		title=f"STATL Check: {registration_no}",
 	)
@@ -93,17 +77,8 @@ def get_registration_type(registration_no, company=None):
 	}
 
 	try:
-		response = requests.post(
-			url,
-			json=payload,
-			headers={
-				"Authorization": f"Bearer {token}",
-				"Content-Type": "application/json",
-				"Accept": "application/json",
-			},
-			timeout=30,
-		)
-	except requests.RequestException as e:
+		result = fbr_post(url, token, payload, "STATL registration type")
+	except FBRError as e:
 		create_log(
 			"Customer",
 			"",
@@ -113,22 +88,14 @@ def get_registration_type(registration_no, company=None):
 			api_type="STATL",
 			title=f"STATL Reg Type Error: {registration_no}",
 		)
-		frappe.throw(_("STATL registration type request failed: {0}").format(str(e)))
-
-	if response.status_code == 401:
-		frappe.throw(_("FBR STATL API returned 401 Unauthorized. Check your access token."))
-
-	try:
-		result = response.json()
-	except ValueError:
-		frappe.throw(_("Invalid response from STATL API"))
+		raise
 
 	create_log(
 		"Customer",
 		"",
 		payload,
 		result,
-		status="Success" if response.status_code == 200 else "Error",
+		status="Success",
 		api_type="STATL",
 		title=f"STATL Reg Type: {registration_no}",
 	)

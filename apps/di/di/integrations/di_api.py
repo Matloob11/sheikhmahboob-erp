@@ -101,7 +101,7 @@ def post_invoice(doc, resync=False):
 		payload["scenarioId"] = doc.di_scenario_id
 
 	try:
-		response = _make_request(url, payload, token)
+		response = _make_request(url, payload, token, context=f"{doc.doctype} {doc.name}")
 	except Exception as e:
 		create_log(
 			doc.doctype,
@@ -112,7 +112,10 @@ def post_invoice(doc, resync=False):
 			api_type="DI Post",
 			title=f"DI Post Error: {doc.doctype} {doc.name}",
 		)
-		frappe.throw(_("FBR DI API request failed: {0}").format(str(e)))
+		# Re-raise rather than collapsing into a generic throw. The type says
+		# whether this may be sent again, and the retry job depends on knowing:
+		# resending after a lost reply can file the same invoice with FBR twice.
+		raise
 
 	invoice_number = response.get("invoiceNumber")
 	if invoice_number:
@@ -135,7 +138,7 @@ def validate_invoice(doc):
 		payload["scenarioId"] = doc.di_scenario_id
 
 	try:
-		response = _make_request(url, payload, token)
+		response = _make_request(url, payload, token, context=f"validate {doc.doctype} {doc.name}")
 	except Exception as e:
 		create_log(
 			doc.doctype,
@@ -146,7 +149,7 @@ def validate_invoice(doc):
 			api_type="DI Validate",
 			title=f"DI Validate Error: {doc.doctype} {doc.name}",
 		)
-		frappe.throw(_("FBR DI validation request failed: {0}").format(str(e)))
+		raise
 
 	create_log(
 		doc.doctype,
@@ -227,32 +230,10 @@ def _get_validate_url(settings):
 	return f"{DI_BASE_URL}{path}"
 
 
-def _make_request(url, payload, token):
-	import requests
+def _make_request(url, payload, token, context="invoice submission"):
+	from di.integrations.http import post
 
-	response = requests.post(
-		url,
-		json=payload,
-		headers={
-			"Authorization": f"Bearer {token}",
-			"Content-Type": "application/json",
-			"Accept": "application/json",
-		},
-		timeout=30,
-	)
-	if response.status_code == 401:
-		frappe.throw(_("FBR API returned 401 Unauthorized. Check your access token."))
-	if response.status_code == 500:
-		frappe.throw(_("FBR API returned 500 Internal Server Error. Contact FBR administrator."))
-	try:
-		return response.json()
-	except requests.exceptions.JSONDecodeError:
-		import json
-		import re
-
-		# FBR API sometimes returns JSON with trailing commas
-		text = re.sub(r",\s*([}\]])", r"\1", response.text)
-		return json.loads(text)
+	return post(url, token, payload, context)
 
 
 def _is_valid_response(response):
