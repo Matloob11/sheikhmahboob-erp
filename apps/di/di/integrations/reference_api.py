@@ -80,7 +80,19 @@ def sync_hs_codes(company=None):
 	return {"message": _("{0} HS codes synced").format(count)}
 
 
-@frappe.whitelist()
+def _guard_reference_access(writes=None):
+	"""Reference lookups spend the company's FBR token and some of them write.
+
+	Without this any authenticated user — a Website User, a restricted role —
+	could drive calls against FBR on the company's credentials and, because
+	these helpers insert with ignore_permissions, create master records through
+	them. `writes` names the doctypes a caller is about to modify.
+	"""
+	frappe.has_permission("DI Settings", "read", throw=True)
+	for doctype in writes or ():
+		frappe.has_permission(doctype, "write", throw=True)
+
+
 @frappe.whitelist()
 def fetch_hs_code_uom(hs_code, company=None):
 	"""Fetch the FBR UOM for one HS code and cache it on the HS Code record.
@@ -97,6 +109,8 @@ def fetch_hs_code_uom(hs_code, company=None):
 	cached = frappe.db.get_value("HS Code", hs_code, "uom")
 	if cached:
 		return cached
+
+	_guard_reference_access(writes=("HS Code", "HS Uom"))
 
 	if not company:
 		company = frappe.defaults.get_global_default("company")
@@ -132,6 +146,8 @@ def sync_hs_code_uoms(company=None, limit=250):
 	unbounded run means thousands of sequential calls to FBR. Run it repeatedly,
 	or rely on fetch_hs_code_uom filling codes in as they get used.
 	"""
+	_guard_reference_access(writes=("HS Code", "HS Uom"))
+
 	if not company:
 		company = frappe.defaults.get_global_default("company")
 
@@ -322,6 +338,8 @@ def get_sro_schedules_for_rate(rate_id, company=None, date=None):
 	if not rate_id:
 		return []
 
+	_guard_reference_access(writes=("SRO Schedule",))
+
 	token = _get_token(company)
 	if not company:
 		company = frappe.defaults.get_global_default("company")
@@ -364,6 +382,8 @@ def get_sro_items_for_schedule(sro_id, date=None, company=None):
 	"""
 	if not sro_id:
 		return []
+
+	_guard_reference_access()
 
 	token = _get_token(company)
 	rows = (

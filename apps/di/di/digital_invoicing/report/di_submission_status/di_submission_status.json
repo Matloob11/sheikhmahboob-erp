@@ -5,19 +5,35 @@
  "disabled": 0,
  "docstatus": 0,
  "doctype": "Report",
- "filters": [],
+ "filters": [
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From Date"
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To Date"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "\nPosted\nNot posted"
+  }
+ ],
  "idx": 0,
  "is_standard": "Yes",
- "modified": "2026-08-12 00:00:00.000000",
+ "modified": "2026-08-12 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "Digital Invoicing",
  "name": "DI Submission Status",
  "owner": "Administrator",
  "prepared_report": 0,
- "query": "select 'Sales Invoice' as \"Document Type:Data:130\", si.name as \"Document:Data:170\", si.posting_date as \"Date:Date:100\", si.customer as \"Party:Data:200\", si.grand_total as \"Amount:Currency:130\", ifnull(si.di_integration_id, '') as \"FBR Invoice No:Data:240\", ifnull(si.di_post_attempts, 0) as \"Attempts:Int:80\", case when ifnull(si.di_integration_id, '') = '' then 'Not posted' else 'Posted' end as \"Status:Data:110\" from `tabSales Invoice` si where si.docstatus = 1 union all select 'Sale Tax Invoice', sti.name, sti.invoice_date, sti.buyer, sti.total_sales_with_taxes, ifnull(sti.fbr_invoice_no, ''), ifnull(sti.di_post_attempts, 0), case when ifnull(sti.fbr_invoice_no, '') = '' then 'Not posted' else 'Posted' end from `tabSale Tax Invoice` sti where sti.docstatus = 1 order by 3 desc, 2 desc",
  "ref_doctype": "Sale Tax Invoice",
  "report_name": "DI Submission Status",
- "report_type": "Query Report",
+ "report_type": "Script Report",
  "roles": [
   {
    "role": "Accounts User"

@@ -176,11 +176,16 @@ def search_hs_uoms(
 def get_setup_status(company=None):
 	"""Check every prerequisite for posting to FBR and say what is missing.
 
-	Setting this up means getting eight unrelated things right, most of which
+	Setting this up means getting eleven unrelated things right, most of which
 	fail late and quietly — a missing Tax Type reports 0% tax, a missing HS UOM
 	is rejected as error 0099, a buyer sharing the seller's NTN is 0058. This
 	reports all of them up front.
 	"""
+	# The result describes the company's tax configuration: whether a token is
+	# held, the seller's registration state, customer counts. Nobody who cannot
+	# read DI Settings should be able to ask for it.
+	frappe.has_permission("DI Settings", "read", throw=True)
+
 	company = company or frappe.defaults.get_global_default("company")
 	checks = []
 
