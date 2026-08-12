@@ -135,6 +135,80 @@ in the interface says any of this, and most mistakes fail late and quietly.
 
 ---
 
+## 4b. Second pass — what is left, in order of risk
+
+### 4b.1 The retry job can file the same invoice twice — fix this first
+
+This one was introduced by the retry work, so it goes at the top.
+
+`post_invoice` wraps the whole HTTP call in one `except Exception`, so a flat
+rejection from FBR and a read timeout are indistinguishable afterwards. A read
+timeout is the dangerous case: FBR may well have recorded the invoice and only
+the reply was lost. `di_integration_id` stays empty, the hourly job sees an
+unposted invoice and sends it again — a second filing against a real tax
+identity, which cannot be withdrawn. Before the job existed a person made that
+call; now nothing does.
+
+The payload carries no client-side reference, so FBR cannot deduplicate it
+either.
+
+Fix: separate the failure kinds. `requests.ConnectionError` means the request
+never left, so retrying is safe. A definite rejection is not worth retrying at
+all — the same payload will be rejected again. A read timeout or a 5xx should
+stop and alert a human rather than retry. In practice that makes the job retry
+almost nothing, which is the correct answer; its real value is the alert.
+
+### 4b.2 There is effectively no test suite
+
+Fifteen of the sixteen test files are 9-line stubs with zero test functions. The
+only real tests are six in `test_tax_item.py`. For an app that files tax returns
+that is thin, and it is not theoretical: all three defects found today —
+`item_wise_tax_detail`, `run_method`, the SRO endpoint — would have been caught
+by one test that builds a payload and asserts on it.
+
+Worth having, in order: a payload builder test per sale type (no network,
+fixtures only), a `_get_taxes` test covering both the v15 and v16 layouts, and a
+retry test that proves a timeout does not cause a second post.
+
+### 4b.3 POS fiscalisation is 385 untested lines
+
+`pos_fiscal.py` is reachable only when a POS Profile has FBR enabled. No POS
+Profile is configured here, so none of it has ever run — not the payment-mode
+mapping, not the 3rd-schedule invoice types, not the NTN/CNIC splitting. It
+handles money and files with FBR. Either exercise it against the sandbox or mark
+it unsupported until someone does.
+
+### 4b.4 Buyers and items are shared across all clients
+
+`Buyer` and `Tax Item` carry no link to a `Seller Or Company`. With fifteen
+clients that is one pool of buyers and one pool of items for everybody: client A
+sees client B's customer list, and a User Permission on Seller Or Company cannot
+help because there is nothing to restrict on. Adding an optional seller link,
+and defaulting it from the invoice, would make per-client isolation possible.
+
+### 4b.5 Every FBR call is hand-rolled
+
+Five `requests.post`/`get` call sites, each with its own headers, its own
+30-second timeout and no retry adapter, no connection pooling and no shared
+error handling. One `requests.Session` with a small retry policy for connection
+errors — never for reads, see 4b.1 — would remove the duplication and make
+behaviour consistent.
+
+### 4b.6 Smaller things
+
+- The standalone `Sale Tax Invoice` and the ERPNext `Sales Invoice` path
+  duplicate payload construction, error handling and QR generation. They have
+  already drifted: the standalone one reads a real notified price, the ERPNext
+  one had to be fixed today.
+- `Scenario` and `Sandbox Scenario` hold the same twelve rows with the same
+  meaning. One of them is redundant.
+- No `Sales Invoice` print format shows the FBR number or QR code; only the
+  standalone one does.
+- `sync_reference_data` enqueues a job and reports nothing afterwards — no
+  counts, no failures, no completion.
+
+---
+
 ## 5. Suggested order
 
 | Priority | Items |
