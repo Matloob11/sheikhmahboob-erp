@@ -23,54 +23,49 @@ numbers.
 
 ---
 
-## 2. Still broken or risky
+## 2. Fixed in the follow-up pass
 
-### 2.1 Client FBR tokens are stored in plain text — highest priority
+Sections 2.1 to 2.6 below were resolved on 2026-08-12. They are kept for the
+record; the fixes are described in section 1 of the git history.
 
-`Seller Or Company.sandbox_token` and `.production_token` are `Data` fields, not
-`Password`. Anyone with the Accounts User role can open the record, or export the
-list, and read every client's FBR token. `DI Settings` already does this
-correctly with `Password` fields.
+### 2.1 Client FBR tokens were stored in plain text — FIXED
 
-With one company this is untidy. With fifteen clients it means one user can post
-invoices under any client's tax identity. Change both fields to `Password` and
-re-enter the tokens.
+`Seller Or Company.sandbox_token` and `.production_token` were `Data` fields, so
+anyone with Accounts User could read every client's token and post under that
+client's tax identity. Both are now `Password`, a patch moved the existing
+values into encrypted storage, and the API reads them with `get_password`.
 
-### 2.2 Purchase Invoice sends an invoice type FBR does not accept
+### 2.2 Purchase Invoice sent an invoice type FBR does not accept — FIXED
 
-`di_api.build_di_payload` sets `invoiceType = "Purchase Invoice"` for purchase
-documents. The DI specification only accepts `Sale Invoice` and `Debit Note`, so
-purchase posting almost certainly fails every time. Untested here because no
-purchase invoices exist.
+`invoiceType` was `"Purchase Invoice"`; DI accepts only `Sale Invoice` and
+`Debit Note`. A purchase is reported from the supplier's side, so it is a sale
+invoice, and a purchase return a debit note.
 
-### 2.3 `fixedNotifiedValueOrRetailPrice` is the unit rate, not the retail price
+### 2.3 `fixedNotifiedValueOrRetailPrice` was the unit rate — FIXED
 
-`di_api` computes it as `net_amount / qty`. For 3rd Schedule goods FBR expects
-the notified retail price and validates tax against it, so those lines will fail
-(errors 0090, 0102). The standalone Sale Tax Invoice does this correctly by
-reading `Tax Item.fixed_rs`.
+It was `net_amount / qty`. A real field now exists on Item and Sales Invoice
+Item, and 0 is sent when it is not set.
 
-### 2.4 DI Settings is loaded by name, not by company
+### 2.4 DI Settings was loaded by name, not by company — FIXED
 
-`db.exists("DI Settings", {"company": X})` is followed by
-`get_doc("DI Settings", X)`. That only works while the record name equals the
-company name. Renaming a company breaks posting.
+Resolved through the company field, so renaming a company no longer breaks
+posting.
 
-### 2.5 HS Code UOMs are effectively unavailable
+### 2.5 HS Code UOMs were unavailable — FIXED
 
-1 of 7,803 HS Codes has a UOM. `sync_hs_code_uoms` cannot fill them because it
-requires `annexure_id` on DI Settings (empty) and issues one API call per HS
-code — 7,803 sequential requests. When the UOM is missing the payload falls back
-to the ERPNext UOM (`Nos`), which FBR rejects with error 0099.
+The endpoint needs an `annexure_id`; without one FBR answers 200 with an empty
+list for every code, which is why nothing was ever filled in. UOMs are now
+fetched one code at a time on demand and cached, and the bulk sync is bounded.
 
-Practical fix: fetch UOMs only for the HS codes actually used, on demand, and
-cache them.
+### 2.6 A failed FBR post was never retried — FIXED
 
-### 2.6 A failed FBR post is never retried
+An hourly job re-posts submitted invoices with no FBR number, gives up after five
+attempts and notifies the accounts team. Attempts are counted on the document,
+because a failed post throws and the throw rolls back the DI Log row.
 
-`scheduler_events` is empty. If FBR is down or the token expires mid-day, each
-invoice must be re-sent by hand from the form. There is no queue, no backoff and
-no record of what still needs sending.
+---
+
+## 2b. Still open
 
 ### 2.7 STATL disagrees with the FBR certificate
 
@@ -91,14 +86,12 @@ they should be pulled from the account, or at least reconciled with a warning.
 
 ## 3. Missing entirely
 
-Verified: 0 Reports, 0 Dashboards, 0 Dashboard Charts, 0 Notifications, 0
-Workflows in this module.
-
-- **No reporting.** Nothing answers "how many invoices went to FBR this month",
-  "which ones failed", "sales tax payable by rate", "which clients are behind".
-  Everything has to be read out of DI Log by hand.
-- **No alerts.** When a post fails nobody is told. The error lives in DI Log and
-  is found only when someone looks.
+- **Reporting** — partly addressed. A `DI Submission Status` query report now
+  lists every submitted Sales Invoice and Sale Tax Invoice with its FBR number,
+  retry count and posted/not-posted state. Still missing: tax summary by rate,
+  monthly volumes, per-client breakdown.
+- **Alerts** — addressed for the case that mattered: when the retry job gives up
+  on a document, everyone with Accounts Manager or System Manager is notified.
 - **No approval step.** An FBR submission cannot be reversed, yet any Accounts
   User can submit straight to production with no second pair of eyes.
 - **No bulk posting.** Fifty invoices means fifty form visits.
@@ -120,26 +113,25 @@ create HS codes with UOMs, set `Tax Type` on the tax template, give the buyer an
 NTN that is not your own, and pick a scenario that matches the sale type. Nothing
 in the interface says any of this, and most mistakes fail late and quietly.
 
-1. **A setup checklist page.** One screen listing each prerequisite with a tick
-   or a cross and a link to fix it. This alone removes most support questions.
-2. **Translate FBR error codes.** The `DI Error Code` doctype already holds 46
-   codes with explanations, but nothing links a failure to it. Show
-   "0077 — a valid SRO/Schedule number is required when the rate is not 18%"
-   next to the failure, with the fix.
-3. **SRO schedule and item as dropdowns.** Today the user must know the strings
-   `EIGHTH SCHEDULE Table 1` and serial `70`. FBR returns valid options per rate;
-   these should be filtered link fields, not free text.
-4. **Validate before submitting.** The Validate button exists but nothing makes
-   you use it, and submitting posts irreversibly. Validate on save, or block
-   submission until a validation has passed.
-5. **Warn when `Tax Type` is unset.** A tax row without `di_tax_type` is skipped
-   silently — the same class of bug that sent 0% to FBR for months. It should
-   refuse to submit, or at least warn.
-6. **Client onboarding template.** Adding a client means recreating seller,
-   tokens, buyers and items from scratch. A duplicate-from-existing action would
-   help.
-7. **Show the QR code and FBR number on the ERPNext Sales Invoice print format**,
-   not only on the standalone one.
+1. **Setup checklist — DONE.** DI Settings has a **Check Setup** button that runs
+   eleven checks and lists what is missing with the fix for each.
+2. **FBR error codes translated — DONE.** Failures now carry the plain-language
+   meaning from `DI Error Code`. Codes 0058, 0077 and 0078 were added; they were
+   missing from the seeded list even though they are the ones you hit first.
+3. **SRO schedule and item pickers — DONE.** A **Fill SRO Details** button on
+   draft Sale Tax Invoices asks FBR which schedules are valid for that line's
+   rate, then which serials exist under the chosen schedule.
+4. **`Tax Type` unset now blocks submission — DONE.** It used to be skipped
+   silently and the invoice was filed at 0%.
+5. **FBR validation errors are readable — DONE.** The dialog used to show only
+   `validationResponse.error`, which FBR usually leaves empty, so a rejected
+   invoice said "Invalid" and nothing else. Per-item errors are shown now.
+6. **Validate before submitting.** Still open. The Validate button exists but
+   nothing makes you use it, and submitting posts irreversibly.
+7. **Client onboarding template.** Still open. Adding a client means recreating
+   seller, tokens, buyers and items from scratch.
+8. **QR code and FBR number on the ERPNext Sales Invoice print format.** Still
+   open; only the standalone invoice shows them.
 
 ---
 

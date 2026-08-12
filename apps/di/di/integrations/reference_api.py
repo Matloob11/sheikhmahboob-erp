@@ -312,6 +312,79 @@ def sync_sro_schedules(rate_id=None, date=None, origination_supplier=None, compa
 
 
 @frappe.whitelist()
+def get_sro_schedules_for_rate(rate_id, company=None, date=None):
+	"""SRO schedules FBR accepts for one rate, as pickable options.
+
+	FBR rejects any line whose rate is not 18% unless it carries a schedule it
+	recognises (error 0077). Users had to know strings like
+	"EIGHTH SCHEDULE Table 1" by heart, so this hands them the real list.
+	"""
+	if not rate_id:
+		return []
+
+	token = _get_token(company)
+	if not company:
+		company = frappe.defaults.get_global_default("company")
+
+	rows = (
+		_make_get_request(
+			f"{REF_BASE_V1}/SroSchedule",
+			token,
+			"SRO schedules",
+			params={
+				"date": _format_reference_date(date),
+				"rate_id": cint(rate_id),
+				"origination_supplier_csv": _get_company_province_code(company),
+			},
+		)
+		or []
+	)
+
+	options = []
+	for row in rows:
+		desc = _row_value(row, "srO_DESC", "sro_desc", "description")
+		sro_id = _row_value(row, "srO_ID", "sro_id", "id")
+		if not desc:
+			continue
+		options.append({"sro_id": sro_id, "sro_desc": desc})
+		if not frappe.db.exists("SRO Schedule", desc):
+			frappe.get_doc({"doctype": "SRO Schedule", "sro_desc": desc, "sro_id": sro_id}).insert(
+				ignore_permissions=True
+			)
+
+	return options
+
+
+@frappe.whitelist()
+def get_sro_items_for_schedule(sro_id, date=None, company=None):
+	"""Item serial numbers FBR accepts under one SRO schedule.
+
+	Error 0078 rejects any serial that is not on this list, so guessing "1" never
+	works.
+	"""
+	if not sro_id:
+		return []
+
+	token = _get_token(company)
+	rows = (
+		_make_get_request(
+			f"{REF_BASE_V2}/SROItem",
+			token,
+			"SRO items",
+			# ISO date on purpose; this endpoint 500s on the dd-Mon-yyyy form.
+			params={"date": getdate(date or nowdate()).strftime("%Y-%m-%d"), "sro_id": cint(sro_id)},
+		)
+		or []
+	)
+
+	return [
+		{"sro_item_id": r.get("srO_ITEM_ID"), "serial": str(r.get("srO_ITEM_DESC"))}
+		for r in rows
+		if r.get("srO_ITEM_DESC")
+	]
+
+
+@frappe.whitelist()
 def sync_sale_type_rates(date=None, trans_type_id=None, origination_supplier=None, company=None):
 	"""Sync sale type to rate mappings from FBR API v2."""
 	data = get_sale_type_rates(date=date, trans_type_id=trans_type_id, origination_supplier=origination_supplier, company=company)

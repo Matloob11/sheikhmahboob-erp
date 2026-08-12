@@ -173,6 +173,81 @@ def search_hs_uoms(
 
 
 @frappe.whitelist()
+def get_setup_status(company=None):
+	"""Check every prerequisite for posting to FBR and say what is missing.
+
+	Setting this up means getting eight unrelated things right, most of which
+	fail late and quietly — a missing Tax Type reports 0% tax, a missing HS UOM
+	is rejected as error 0099, a buyer sharing the seller's NTN is 0058. This
+	reports all of them up front.
+	"""
+	company = company or frappe.defaults.get_global_default("company")
+	checks = []
+
+	def add(label, ok, hint=""):
+		checks.append({"label": label, "ok": bool(ok), "hint": "" if ok else hint})
+
+	settings_name = frappe.db.get_value("DI Settings", {"company": company}, "name")
+	add(
+		_("DI Settings exist for {0}").format(company or "?"),
+		settings_name,
+		_("Create a DI Settings record for this company."),
+	)
+	if not settings_name:
+		return {"company": company, "checks": checks}
+
+	settings = frappe.get_doc("DI Settings", settings_name)
+	add(_("Digital Invoicing enabled"), settings.enabled, _("Tick Enable Digital Invoicing."))
+	add(
+		_("FBR access token set ({0})").format(settings.sync_mode),
+		settings.get_password("access_token", raise_exception=False),
+		_("Paste the FBR token for the {0} environment.").format(settings.sync_mode),
+	)
+	add(_("Seller NTN/CNIC set"), settings.ntn_cnic, _("Fill NTN/CNIC in DI Settings."))
+	add(_("Seller province set"), settings.province, _("Fill Province in DI Settings."))
+	add(_("Seller address set"), settings.address, _("Fill Address in DI Settings."))
+	add(
+		_("Sale types configured"),
+		len(settings.get("sale_types") or []),
+		_("Add the sale types you use to the Sale Types table, otherwise Items cannot pick one."),
+	)
+
+	typed = frappe.db.count("Sales Taxes and Charges", {"di_tax_type": ["is", "set"]})
+	add(
+		_("Tax templates carry a Tax Type"),
+		typed,
+		_("Set Tax Type on your Sales Taxes and Charges rows, or FBR is told the tax is zero."),
+	)
+
+	items = frappe.db.count("Item", {"disabled": 0})
+	with_hs = frappe.db.count("Item", {"disabled": 0, "hs_code": ["is", "set"]})
+	if not items:
+		add(_("Items created"), False, _("No items exist yet. Create the items you sell."))
+	else:
+		add(
+			_("Items have an HS Code ({0} of {1})").format(with_hs, items),
+			with_hs == items,
+			_("Set HS Code on every item you sell; FBR rejects a line without one."),
+		)
+
+	customers = frappe.db.count("Customer", {"enable_digital_invoicing": 1})
+	add(
+		_("Customers marked for Digital Invoicing"),
+		customers,
+		_("Tick Enable Digital Invoicing on the customers you report."),
+	)
+
+	clash = frappe.db.count("Customer", {"ntn_cnic": settings.ntn_cnic}) if settings.ntn_cnic else 0
+	add(
+		_("No customer shares the seller's NTN"),
+		not clash,
+		_("FBR refuses self invoicing (error 0058). Give those customers their own NTN."),
+	)
+
+	return {"company": company, "checks": checks}
+
+
+@frappe.whitelist()
 def get_qr_code(integration_id):
 	"""Generate FBR QR code at runtime for a given integration ID."""
 	from di.integrations.qr_code import generate_qr_code

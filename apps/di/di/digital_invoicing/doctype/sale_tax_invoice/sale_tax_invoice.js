@@ -105,8 +105,125 @@ function set_item_sale_type(frm) {
 	});
 }
 
+// FBR usually leaves validationResponse.error empty and puts the real reason on
+// each item in invoiceStatuses, so reporting only the top-level field showed
+// "Invalid" with no explanation.
+function describe_fbr_errors(vr) {
+	let lines = [];
+	if (vr.error) lines.push(frappe.utils.escape_html(vr.error));
+
+	(vr.invoiceStatuses || []).forEach((row) => {
+		if (row.status === "Valid" || !row.error) return;
+		let code = row.errorCode ? `${row.errorCode}: ` : "";
+		lines.push(
+			__("Item {0} — {1}", [
+				row.itemSNo || "?",
+				frappe.utils.escape_html(code + row.error)
+			])
+		);
+	});
+
+	if (!lines.length) lines.push(__("FBR reported the invoice as {0}.", [vr.status || "Invalid"]));
+	return lines.join("<br><br>");
+}
+
+// FBR rejects a non-18% line without an SRO schedule (0077) and rejects a serial
+// it does not recognise (0078). Rather than expecting the user to memorise
+// strings like "EIGHTH SCHEDULE Table 1" and serial "70", ask FBR what is valid.
+async function fill_sro_details(frm) {
+	let pending = (frm.doc.invoice_items || []).filter(
+		(row) => flt(row.tax_rate_value) !== 18 && !row.sro_schedule_no
+	);
+
+	if (!pending.length) {
+		frappe.msgprint(__("No rows need an SRO schedule. FBR only requires one when the rate is not 18%."));
+		return;
+	}
+
+	for (let row of pending) {
+		let rate_id = await frappe.db.get_value("Tax Item", row.description, "rate_id");
+		rate_id = rate_id && rate_id.message ? rate_id.message.rate_id : null;
+
+		if (!rate_id) {
+			frappe.msgprint(
+				__("Item {0} has no FBR rate id. Open the Tax Item and fetch its tax rate first.", [
+					row.description
+				])
+			);
+			continue;
+		}
+
+		let schedules = await frappe.xcall("di.integrations.reference_api.get_sro_schedules_for_rate", {
+			rate_id: rate_id
+		});
+
+		if (!schedules || !schedules.length) {
+			frappe.msgprint(__("FBR returned no SRO schedule for the rate on item {0}.", [row.description]));
+			continue;
+		}
+
+		let chosen = await pick_option(
+			__("SRO Schedule for {0}", [row.description]),
+			schedules.map((s) => ({ label: s.sro_desc, value: String(s.sro_id) }))
+		);
+		if (!chosen) return;
+
+		let schedule = schedules.find((s) => String(s.sro_id) === chosen);
+		let serials = await frappe.xcall("di.integrations.reference_api.get_sro_items_for_schedule", {
+			sro_id: chosen
+		});
+
+		if (!serials || !serials.length) {
+			frappe.msgprint(__("FBR returned no item serials for {0}.", [schedule.sro_desc]));
+			continue;
+		}
+
+		let serial = await pick_option(
+			__("Item Serial under {0}", [schedule.sro_desc]),
+			serials.map((s) => ({ label: s.serial, value: s.serial }))
+		);
+		if (!serial) return;
+
+		frappe.model.set_value(row.doctype, row.name, "sro_schedule_no", schedule.sro_desc);
+		frappe.model.set_value(row.doctype, row.name, "sro_item_serial_no", serial);
+	}
+}
+
+function pick_option(title, options) {
+	return new Promise((resolve) => {
+		let d = new frappe.ui.Dialog({
+			title: title,
+			fields: [
+				{
+					fieldname: "choice",
+					fieldtype: "Select",
+					label: __("Choose"),
+					options: options.map((o) => o.label),
+					reqd: 1
+				}
+			],
+			primary_action_label: __("Use this"),
+			primary_action(values) {
+				let match = options.find((o) => o.label === values.choice);
+				d.hide();
+				resolve(match ? match.value : null);
+			}
+		});
+		d.onhide = () => resolve(null);
+		d.show();
+	});
+}
+
 function add_fbr_buttons(frm) {
 	if (frm.is_new()) return;
+
+	if (frm.doc.docstatus === 0) {
+		frm.add_custom_button(
+			__("Fill SRO Details"),
+			() => fill_sro_details(frm),
+			__("Digital Invoicing")
+		);
+	}
 
 	frm.add_custom_button(
 		__("DI Preview"),
@@ -150,7 +267,7 @@ function add_fbr_buttons(frm) {
 						message:
 							status === "Valid"
 								? __("Invoice is valid according to FBR")
-								: __("Validation result: {0}", [vr.error || status])
+								: describe_fbr_errors(vr)
 					});
 				});
 		},
