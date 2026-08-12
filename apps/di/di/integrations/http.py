@@ -100,12 +100,66 @@ def _check_status(response, context):
 				response.status_code, context
 			)
 		)
+	if response.status_code >= 400:
+		# Every other 4xx is a refusal too. Letting them through meant a 404 or a
+		# 400 was parsed as though it were a normal answer, so a reference sync
+		# would quietly process an error body as data.
+		raise FBRRejected(
+			_("FBR refused the request for {0}: {1} {2}").format(
+				context, response.status_code, (response.text or "")[:200]
+			)
+		)
+
+
+# Failures raised while the socket is still being established. Anything else —
+# an aborted connection, a reset partway through — may have reached FBR after it
+# had already read the request.
+_CONNECT_PHASE_FAILURES = frozenset(
+	{
+		"ConnectTimeoutError",
+		"NewConnectionError",
+		"NameResolutionError",
+		"gaierror",
+	}
+)
+
+
+def _never_sent(exc):
+	"""True only when the request provably never reached FBR.
+
+	requests.ConnectionError is not that guarantee. It also wraps ProtocolError
+	— "Remote end closed connection without response" — which happens when the
+	server read the request, acted on it, and dropped the connection before
+	answering. Retrying that files the invoice a second time, which is the exact
+	failure this module exists to prevent, so the check has to look at what
+	actually went wrong rather than at the outermost class.
+	"""
+	if isinstance(exc, requests.exceptions.ConnectTimeout):
+		return True
+
+	seen = []
+	queue = [exc]
+	while queue and len(seen) < 12:
+		current = queue.pop()
+		if current is None or id(current) in [id(s) for s in seen]:
+			continue
+		seen.append(current)
+
+		if type(current).__name__ in _CONNECT_PHASE_FAILURES:
+			return True
+
+		queue.append(getattr(current, "__cause__", None))
+		queue.append(getattr(current, "__context__", None))
+		# urllib3 nests the real failure inside args rather than the cause chain.
+		for arg in getattr(current, "args", ()) or ():
+			if isinstance(arg, BaseException):
+				queue.append(arg)
+
+	return False
 
 
 def request(method, url, token, context, json_body=None, params=None, extra_headers=None):
 	"""Call FBR and return the decoded body, or raise one of the errors above."""
-	last_connection_error = None
-
 	for attempt in range(CONNECT_ATTEMPTS):
 		try:
 			response = requests.request(
@@ -117,18 +171,19 @@ def request(method, url, token, context, json_body=None, params=None, extra_head
 				timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
 			)
 			break
-		except requests.ConnectionError as exc:
-			# Never sent. Safe to try again after a short pause.
-			last_connection_error = exc
-			if attempt + 1 < CONNECT_ATTEMPTS:
+		except requests.Timeout as exc:
+			# A connect timeout never established the socket, so nothing was
+			# sent. A read timeout means the request left and FBR may have
+			# processed it.
+			if _never_sent(exc) and attempt + 1 < CONNECT_ATTEMPTS:
 				time.sleep(CONNECT_BACKOFF_SECONDS * (attempt + 1))
 				continue
-			raise FBRUnsentError(
-				_("Could not reach FBR for {0}: {1}").format(context, str(exc)[:200])
-			)
-		except requests.Timeout as exc:
-			# The request left. FBR may have processed it. This must not be
-			# retried automatically anywhere.
+			if _never_sent(exc):
+				raise FBRUnsentError(
+					_("Could not open a connection to FBR for {0}: {1}").format(
+						context, str(exc)[:200]
+					)
+				)
 			raise FBRUncertainError(
 				_(
 					"FBR did not answer in time for {0}. It may have been recorded — check with FBR "
@@ -136,11 +191,19 @@ def request(method, url, token, context, json_body=None, params=None, extra_head
 				).format(context, str(exc)[:200])
 			)
 		except requests.RequestException as exc:
+			if _never_sent(exc):
+				if attempt + 1 < CONNECT_ATTEMPTS:
+					time.sleep(CONNECT_BACKOFF_SECONDS * (attempt + 1))
+					continue
+				raise FBRUnsentError(
+					_("Could not reach FBR for {0}: {1}").format(context, str(exc)[:200])
+				)
 			raise FBRUncertainError(
-				_("The request to FBR for {0} failed: {1}").format(context, str(exc)[:200])
+				_(
+					"The connection to FBR broke during {0}, after the request had been sent. It may "
+					"have been recorded — check before sending it again. ({1})"
+				).format(context, str(exc)[:200])
 			)
-	else:  # pragma: no cover - loop always breaks or raises
-		raise FBRUnsentError(str(last_connection_error))
 
 	_check_status(response, context)
 	return _parse(response, context)

@@ -37,11 +37,42 @@ class TestFBRErrorClassification(unittest.TestCase):
 					return exc, call
 				return result, call
 
-	def test_connection_error_is_unsent_and_retried(self):
-		"""A refused connection never reached FBR, so sending it again is safe."""
-		error, call = self._call(side_effect=requests.ConnectionError("refused"))
+	@staticmethod
+	def _refused():
+		"""A connection that was never established, shaped the way urllib3 nests it."""
+		inner = type("NewConnectionError", (OSError,), {})("connection refused")
+		return requests.ConnectionError(inner)
+
+	@staticmethod
+	def _aborted_midflight():
+		"""FBR read the request, then dropped the connection before answering."""
+		inner = type("ProtocolError", (OSError,), {})(
+			"Connection aborted: Remote end closed connection without response"
+		)
+		return requests.ConnectionError(inner)
+
+	def test_refused_connection_is_unsent_and_retried(self):
+		"""Nothing reached FBR, so sending it again is safe."""
+		error, call = self._call(side_effect=self._refused())
 		self.assertIsInstance(error, http.FBRUnsentError)
 		self.assertEqual(call.call_count, http.CONNECT_ATTEMPTS)
+
+	def test_connection_aborted_after_sending_is_uncertain(self):
+		"""The request was delivered. Resending it would file the invoice twice."""
+		error, call = self._call(side_effect=self._aborted_midflight())
+		self.assertIsInstance(error, http.FBRUncertainError)
+		self.assertEqual(call.call_count, 1, "a mid-flight abort must not be retried")
+
+	def test_connect_timeout_is_unsent(self):
+		"""The socket was never established, so nothing was filed."""
+		error, _call = self._call(side_effect=requests.ConnectTimeout("connect timed out"))
+		self.assertIsInstance(error, http.FBRUnsentError)
+
+	def test_client_errors_are_rejections_not_data(self):
+		"""A 404 body used to be parsed as though it were a normal answer."""
+		for status in (400, 404, 422):
+			error, _call = self._call(return_value=FakeResponse(status, text="nope"))
+			self.assertIsInstance(error, http.FBRRejected, f"status {status}")
 
 	def test_read_timeout_is_uncertain_and_never_retried(self):
 		"""The request left. FBR may hold the invoice, so this must not resend."""
