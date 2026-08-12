@@ -94,11 +94,14 @@ def validate_sale_tax_invoice(doc):
 
 def build_sale_tax_invoice_payload(doc):
 	"""Build FBR DI payload from the standalone Sale Tax Invoice document."""
-	doc.run_method("_sync_buyer_details")
-	doc.run_method("_sync_seller_details")
-	doc.run_method("_sync_item_details")
-	doc.run_method("_apply_scenario_sale_type")
-	doc.run_method("_calculate_totals")
+	# Call these directly. Frappe 16 makes run_method() raise for names starting
+	# with an underscore ("Run method is for hooks, avoid usage on internal
+	# methods"), which broke every post and validate on this doctype.
+	doc._sync_buyer_details()
+	doc._sync_seller_details()
+	doc._sync_item_details()
+	doc._apply_scenario_sale_type()
+	doc._calculate_totals()
 
 	invoice = Invoice(
 		invoiceType=doc.invoice_type,
