@@ -137,6 +137,51 @@ def _alert_recipients():
 	return recipients or ["Administrator"]
 
 
+def run_reference_sync(dotted_path, label, user, **kwargs):
+	"""Run a reference sync in the background and say how it went.
+
+	sync_reference_data used to enqueue a job and promise "you will be notified
+	on completion". Nothing notified anyone: a sync could fail against FBR and
+	the only trace was an Error Log nobody reads.
+	"""
+	from frappe.utils import get_attr
+
+	try:
+		result = get_attr(dotted_path)(**kwargs)
+		message = (result or {}).get("message") if isinstance(result, dict) else None
+		_notify_user(
+			user,
+			_("Reference sync finished: {0}").format(label),
+			message or _("Completed."),
+		)
+	except Exception as exc:
+		frappe.log_error(frappe.get_traceback(), f"Reference sync failed: {label}")
+		_notify_user(
+			user,
+			_("Reference sync failed: {0}").format(label),
+			frappe.utils.escape_html(str(exc))[:1000],
+		)
+		raise
+	finally:
+		frappe.db.commit()
+
+
+def _notify_user(user, subject, message):
+	if not user or user in ("Guest",):
+		return
+
+	frappe.get_doc(
+		{
+			"doctype": "Notification Log",
+			"for_user": user,
+			"type": "Alert",
+			"subject": subject,
+			"email_content": message,
+			"document_type": "DI Settings",
+		}
+	).insert(ignore_permissions=True)
+
+
 def count_unposted():
 	"""Small helper for dashboards and tests."""
 	cutoff = add_days(today(), -LOOKBACK_DAYS)

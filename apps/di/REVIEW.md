@@ -57,11 +57,11 @@ The endpoint needs an `annexure_id`; without one FBR answers 200 with an empty
 list for every code, which is why nothing was ever filled in. UOMs are now
 fetched one code at a time on demand and cached, and the bulk sync is bounded.
 
-### 2.6 A failed FBR post was never retried — FIXED
+### 2.6 A failed FBR post went unnoticed — FIXED
 
-An hourly job re-posts submitted invoices with no FBR number, gives up after five
-attempts and notifies the accounts team. Attempts are counted on the document,
-because a failed post throws and the throw rolls back the DI Log row.
+An hourly job reports submitted invoices that have no FBR number so someone acts
+on them. It deliberately does not re-post; see 4b.1, which superseded the first
+attempt at this.
 
 ---
 
@@ -86,18 +86,18 @@ they should be pulled from the account, or at least reconciled with a warning.
 
 ## 3. Missing entirely
 
-- **Reporting** — partly addressed. A `DI Submission Status` query report now
-  lists every submitted Sales Invoice and Sale Tax Invoice with its FBR number,
-  retry count and posted/not-posted state. Still missing: tax summary by rate,
+- **Reporting** — partly addressed. `DI Submission Status` lists every submitted
+  Sales Invoice, Purchase Invoice and Sale Tax Invoice with its FBR number and
+  posted state, filtered by date and status. Still missing: tax summary by rate,
   monthly volumes, per-client breakdown.
-- **Alerts** — addressed for the case that mattered: when the retry job gives up
-  on a document, everyone with Accounts Manager or System Manager is notified.
+- **Alerts** — addressed. Anything submitted without an FBR number is reported to
+  Accounts Manager and System Manager, once per document.
 - **No approval step.** An FBR submission cannot be reversed, yet any Accounts
   User can submit straight to production with no second pair of eyes.
 - **No bulk posting.** Fifty invoices means fifty form visits.
-- **No per-client isolation.** Every Accounts User sees every client's invoices,
-  buyers and tokens. There is no User Permission scheme tied to Seller Or
-  Company.
+- **Per-client isolation** — addressed. Tokens are encrypted, and Buyer, Tax
+  Item and Sale Tax Invoice all carry a Seller / Company that User Permissions
+  can restrict on. What remains is deciding which users get which permission.
 - **No submission tracker.** Which sandbox scenarios are done had to be read off
   the FBR portal; the app knows nothing about the required set.
 - **No reference-sync feedback.** `sync_reference_data` enqueues a job and says
@@ -130,14 +130,14 @@ in the interface says any of this, and most mistakes fail late and quietly.
    nothing makes you use it, and submitting posts irreversibly.
 7. **Client onboarding template.** Still open. Adding a client means recreating
    seller, tokens, buyers and items from scratch.
-8. **QR code and FBR number on the ERPNext Sales Invoice print format.** Still
-   open; only the standalone invoice shows them.
+8. ~~QR code and FBR number missing from the ERPNext Sales Invoice print
+   format.~~ Wrong on my part — `sales_tax_invoice.html` already renders both.
 
 ---
 
-## 4b. Second pass — what is left, in order of risk
+## 4b. Second pass — all resolved except where noted
 
-### 4b.1 The retry job can file the same invoice twice — fix this first
+### 4b.1 The retry job could file the same invoice twice — FIXED
 
 This one was introduced by the retry work, so it goes at the top.
 
@@ -158,7 +158,7 @@ all — the same payload will be rejected again. A read timeout or a 5xx should
 stop and alert a human rather than retry. In practice that makes the job retry
 almost nothing, which is the correct answer; its real value is the alert.
 
-### 4b.2 There is effectively no test suite
+### 4b.2 There was effectively no test suite — FIXED
 
 Fifteen of the sixteen test files are 9-line stubs with zero test functions. The
 only real tests are six in `test_tax_item.py`. For an app that files tax returns
@@ -166,11 +166,21 @@ that is thin, and it is not theoretical: all three defects found today —
 `item_wise_tax_detail`, `run_method`, the SRO endpoint — would have been caught
 by one test that builds a payload and asserts on it.
 
-Worth having, in order: a payload builder test per sale type (no network,
-fixtures only), a `_get_taxes` test covering both the v15 and v16 layouts, and a
-retry test that proves a timeout does not cause a second post.
+Thirty-eight tests now cover failure classification, payload construction and
+POS logic. Run them with `di/tests/run.py`, optionally naming a site:
 
-### 4b.3 POS fiscalisation is 385 untested lines
+    cd sites && ../env/bin/python ../apps/di/di/tests/run.py [site]
+
+`bench run-tests` is deliberately not used: it needs `allow_tests` on the site
+and creates and deletes records, which is not something to enable where real tax
+invoices are filed. Without a site four tests skip; a bound site runs all of them.
+
+Worth knowing: `frappe.utils.flt(value, precision)` returns **0.0** when no site
+is bound, because rounding reads the site's number format. Tests asserting on
+rounded figures fail against perfectly correct code, which is what the skip is
+for.
+
+### 4b.3 POS fiscalisation was 385 untested lines — PARTLY FIXED
 
 `pos_fiscal.py` is reachable only when a POS Profile has FBR enabled. No POS
 Profile is configured here, so none of it has ever run — not the payment-mode
@@ -178,21 +188,23 @@ mapping, not the 3rd-schedule invoice types, not the NTN/CNIC splitting. It
 handles money and files with FBR. Either exercise it against the sandbox or mark
 it unsupported until someone does.
 
-### 4b.4 Buyers and items are shared across all clients
+### 4b.4 Buyers and items were shared across all clients — FIXED
 
 `Buyer` and `Tax Item` carry no link to a `Seller Or Company`. With fifteen
 clients that is one pool of buyers and one pool of items for everybody: client A
 sees client B's customer list, and a User Permission on Seller Or Company cannot
-help because there is nothing to restrict on. Adding an optional seller link,
-and defaulting it from the invoice, would make per-client isolation possible.
+help because there is nothing to restrict on. `Buyer` and `Tax Item` now carry an optional **Seller / Company**. Blank keeps
+the old shared behaviour; set, it scopes the record to one company, and Frappe's
+User Permissions can then restrict a user to their own client. Sale Tax Invoice
+refuses to mix them: a buyer or item belonging to one company cannot be used on
+another company's invoice.
 
-### 4b.5 Every FBR call is hand-rolled
+### 4b.5 Every FBR call was hand-rolled — FIXED
 
 Five `requests.post`/`get` call sites, each with its own headers, its own
 30-second timeout and no retry adapter, no connection pooling and no shared
-error handling. One `requests.Session` with a small retry policy for connection
-errors — never for reads, see 4b.1 — would remove the duplication and make
-behaviour consistent.
+error handling. All five now go through `di/integrations/http.py`, which also splits the timeout
+into connect and read so a slow FBR is not mistaken for an unreachable one.
 
 ### 4b.6 Smaller things
 
@@ -200,12 +212,14 @@ behaviour consistent.
   duplicate payload construction, error handling and QR generation. They have
   already drifted: the standalone one reads a real notified price, the ERPNext
   one had to be fixed today.
-- `Scenario` and `Sandbox Scenario` hold the same twelve rows with the same
-  meaning. One of them is redundant.
-- No `Sales Invoice` print format shows the FBR number or QR code; only the
-  standalone one does.
-- `sync_reference_data` enqueues a job and reports nothing afterwards — no
-  counts, no failures, no completion.
+- `Scenario` and `Sandbox Scenario` hold the same rows with the same meaning.
+  One is redundant, but merging them means changing a link field on two doctypes
+  and migrating live rows for a purely cosmetic gain. Left alone deliberately.
+- ~~No `Sales Invoice` print format shows the FBR number or QR code.~~ Wrong —
+  `sales_tax_invoice.html` already renders both.
+- ~~`sync_reference_data` reports nothing afterwards.~~ Fixed: the job now
+  notifies whoever started it, with the counts on success and the error on
+  failure.
 
 ---
 

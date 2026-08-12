@@ -55,6 +55,7 @@ class SaleTaxInvoice(Document):
 		self._sync_buyer_details()
 		self._sync_seller_details()
 		self._sync_item_details()
+		self._validate_seller_scope()
 		self._apply_scenario_sale_type()
 		self._calculate_totals()
 		self._set_qr_code_data()
@@ -101,6 +102,36 @@ class SaleTaxInvoice(Document):
 		self.seller_ntncnic = seller.seller_ntncnic
 		self.seller_address = seller.seller_address
 		self.seller_province = seller.seller_province
+
+	def _validate_seller_scope(self):
+		"""Keep one company's buyers and items out of another company's invoice.
+
+		Buyer and Tax Item carry an optional Seller / Company. Blank means shared
+		across every company, which is the old behaviour and stays valid. Where
+		it is set, it must match the seller on this invoice — otherwise a sale is
+		filed under one tax identity using another's customer record.
+		"""
+		if not self.seller__business_name:
+			return
+
+		buyer_seller = frappe.db.get_value("Buyer", self.buyer, "seller") if self.buyer else None
+		if buyer_seller and buyer_seller != self.seller__business_name:
+			frappe.throw(
+				_("Buyer {0} belongs to {1}, not to {2}.").format(
+					self.buyer, buyer_seller, self.seller__business_name
+				)
+			)
+
+		for row in self.get("invoice_items") or []:
+			if not row.description:
+				continue
+			item_seller = frappe.db.get_value("Tax Item", row.description, "seller")
+			if item_seller and item_seller != self.seller__business_name:
+				frappe.throw(
+					_("Row {0}: item {1} belongs to {2}, not to {3}.").format(
+						row.idx, row.description, item_seller, self.seller__business_name
+					)
+				)
 
 	def _sync_item_details(self):
 		for row in self.get("invoice_items") or []:

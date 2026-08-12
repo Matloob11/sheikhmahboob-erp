@@ -92,11 +92,17 @@ def sync_reference_data(data_type, **kwargs):
 	supported_params = signature(func).parameters
 	filtered_kwargs = {key: value for key, value in kwargs.items() if key in supported_params}
 
+	# Wrapped so the promise below is actually kept: the wrapper reports the
+	# outcome, success or failure, back to whoever pressed the button. The bare
+	# enqueue used to fail silently into an Error Log nobody reads.
 	frappe.enqueue(
-		func,
+		"di.tasks.run_reference_sync",
 		queue="default",
 		job_id=f"sync_reference_data_{data_type}",
 		deduplicate=True,
+		dotted_path=f"{func.__module__}.{func.__name__}",
+		label=data_type,
+		user=frappe.session.user,
 		**filtered_kwargs,
 	)
 

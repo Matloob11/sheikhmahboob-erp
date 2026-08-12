@@ -5,6 +5,7 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "seller",
   "buyer_details_section",
   "buyer_registration_type",
   "buyer_ntncnic",
@@ -14,6 +15,14 @@
   "buyer_address"
  ],
  "fields": [
+  {
+   "description": "Leave blank to share this record across all your companies.",
+   "fieldname": "seller",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Seller / Company",
+   "options": "Seller Or Company"
+  },
   {
    "fieldname": "buyer_details_section",
    "fieldtype": "Section Break",
@@ -60,7 +69,7 @@
   }
  ],
  "links": [],
- "modified": "2026-05-20 00:00:00.000000",
+ "modified": "2026-08-12 16:00:00.000000",
  "modified_by": "Administrator",
  "module": "Digital Invoicing",
  "name": "Buyer",
