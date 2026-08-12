@@ -173,11 +173,35 @@ def sync_transaction_types(company=None):
 
 
 @frappe.whitelist()
-def sync_sro_item_codes(company=None):
-	"""Sync SRO item codes from FBR API."""
+def sync_sro_item_codes(sro_id=None, date=None, company=None):
+	"""Sync SRO item serial numbers from FBR API.
+
+	Item serials are per SRO schedule, so this walks the SRO Schedule master
+	unless a single sro_id is given.
+
+	Two things differ from the other reference endpoints and both used to break
+	this sync silently: the path is v2/SROItem (v1/sroitemcode answers 200 with
+	the UOM list, so the old code stored UOM rows as SRO Items), and the date
+	must be ISO — the dd-Mon-yyyy form the rate endpoints want returns 500 here.
+	"""
 	token = _get_token(company)
-	url = f"{REF_BASE_V1}/sroitemcode"
-	data = _make_get_request(url, token, "SRO item codes")
+	url = f"{REF_BASE_V2}/SROItem"
+	iso_date = getdate(date or nowdate()).strftime("%Y-%m-%d")
+
+	if sro_id:
+		sro_ids = [sro_id]
+	else:
+		sro_ids = [s for s in frappe.get_all("SRO Schedule", pluck="sro_id") if s]
+
+	if not sro_ids:
+		frappe.throw(_("No SRO Schedules found. Sync SRO Schedules before SRO item codes."))
+
+	data = []
+	for current in sro_ids:
+		rows = _make_get_request(
+			url, token, "SRO item codes", params={"date": iso_date, "sro_id": current}
+		)
+		data.extend(rows or [])
 
 	count = 0
 	for item in data:
