@@ -92,6 +92,7 @@
   {
    "fieldname": "fbr_invoice_no",
    "fieldtype": "Data",
+   "in_list_view": 1,
    "label": "FBR Invoice No",
    "read_only": 1
   },
@@ -115,6 +116,7 @@
   {
    "fieldname": "buyer",
    "fieldtype": "Link",
+   "in_standard_filter": 1,
    "label": "Buyer / Business Name",
    "options": "Buyer",
    "reqd": 1
@@ -159,6 +161,8 @@
   {
    "fieldname": "seller__business_name",
    "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
    "label": "Seller / Business Name",
    "options": "Seller Or Company",
    "reqd": 1
