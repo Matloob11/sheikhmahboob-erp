@@ -1,10 +1,24 @@
-# Move to the new VPS — remaining step
+# Move to the new VPS — DONE 2026-08-20
 
-The instance that serves `sheikhmahboob.com` has been rebuilt on the new server
-and verified against the real hostname and the real certificate. Nothing has
-moved yet: DNS still points at the old box, which is still serving live traffic.
+`sheikhmahboob.com` and `www.sheikhmahboob.com` now serve from **187.52.120.196**.
+Verified live: `/`, `/login`, `/app`, `/assets/...`, `/files/...`, `/robots.txt`
+and `www` all answer 200 from the new IP, `http://` redirects, and the
+certificate validates with 81 days left.
 
-One step is left, and it is yours: the DNS record.
+Two things surfaced only after the DNS change, both fixed:
+
+- **The ACME account had not been copied.** The certificate itself worked, so
+  nothing looked wrong — but `certbot renew --dry-run` failed with "You should
+  register before running non-interactively", meaning the November renewal would
+  have failed quietly. `/etc/letsencrypt/accounts` was copied from the old box
+  and the dry run now succeeds.
+- **`/home/frappe` was `drwxr-x---`**, so nginx (`www-data`) could not traverse
+  it and every static file returned 404 with `stat() failed (13: Permission
+  denied)` in the error log — assets, the logo and robots.txt. Fixed with
+  `chmod o+x /home/frappe`, which allows traversal without allowing the
+  directory to be listed.
+
+Steps 1 and 2 below are kept as the record of how it was done.
 
 ## Where things stand
 
@@ -44,7 +58,7 @@ The certificate was copied from the old server before the move, so HTTPS works
 from the instant DNS changes rather than breaking until certbot can run. It is
 valid to 9 November 2026 and `certbot.timer` is enabled on the new box.
 
-## The step
+## The DNS step (done)
 
 At GoDaddy (`ns57`/`ns58.domaincontrol.com`), change the A records:
 
