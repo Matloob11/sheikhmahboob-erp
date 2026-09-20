@@ -444,6 +444,31 @@ export async function exportBackup(options: {
   downloadJson(backup, backupDownloadName(new Date(), options.clientId));
 }
 
+/** One-way server push: full desk snapshot with plain tokens (local API / M1). */
+export async function buildServerPushBackup(): Promise<DeskBackup> {
+  const snapshot = await readSnapshot();
+  const tokens = tokenMap(snapshot.clients);
+  return {
+    version: 5,
+    exportedAt: Date.now(),
+    tokenHandling: "plain",
+    tokenCount: Object.keys(tokens).length,
+    settings: snapshot.settings,
+    clients: snapshot.clients,
+    invoices: snapshot.invoices,
+    purchases: snapshot.purchases,
+    returns: snapshot.returns,
+    psids: snapshot.psids,
+    events: snapshot.events.map(sanitizeEvent),
+    buyers: snapshot.buyers,
+    items: snapshot.items,
+    pctCodes: snapshot.pctCodes,
+    clientPlaces: snapshot.clientPlaces,
+    clientBanks: snapshot.clientBanks,
+    clientPosDevices: snapshot.clientPosDevices,
+  };
+}
+
 export async function applyBackup(backup: DeskBackup, mode: ImportMode): Promise<BackupPreview> {
   const incomingSettings = backup.settings
     ? { ...backup.settings, workingPeriod: backup.settings.workingPeriod || currentPeriod() }

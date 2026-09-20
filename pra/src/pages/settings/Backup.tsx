@@ -8,6 +8,7 @@ import { useNotice } from "../../context/NoticeContext";
 import { hasPracticePin, lockPractice } from "../../domain/settings";
 import {
   applyBackup,
+  buildServerPushBackup,
   exportBackup,
   parseBackupText,
   prepareImport,
@@ -17,6 +18,21 @@ import {
   type ImportMode,
 } from "../../lib/backup";
 import type { DeskEvent } from "../../types";
+
+const API_URL_KEY = "daftar.apiBase";
+const API_EMAIL_KEY = "daftar.apiEmail";
+
+function defaultApiBase(): string {
+  const stored = localStorage.getItem(API_URL_KEY);
+  if (stored) return stored;
+  if (typeof import.meta !== "undefined" && import.meta.env?.VITE_DAFTAR_API) {
+    return import.meta.env.VITE_DAFTAR_API;
+  }
+  if (typeof location !== "undefined" && /sheikhmahboob\.com$/i.test(location.hostname)) {
+    return "https://sheikhmahboob.com/pra-api/v1";
+  }
+  return "http://127.0.0.1:8787/v1";
+}
 
 function lastImported(events: ReadonlyArray<DeskEvent>): DeskEvent | undefined {
   return events.find((event) => event.kind === "backup.imported");
@@ -41,6 +57,10 @@ export function BackupSection() {
   const [pending, setPending] = useState<{ backup: DeskBackup; preview: BackupPreview; name: string } | null>(
     null,
   );
+  const [apiBase, setApiBase] = useState(defaultApiBase);
+  const [apiEmail, setApiEmail] = useState(() => localStorage.getItem(API_EMAIL_KEY) ?? "");
+  const [apiPassword, setApiPassword] = useState("");
+  const [pushBusy, setPushBusy] = useState(false);
   const imported = lastImported(events);
 
   async function onExport() {
@@ -78,6 +98,61 @@ export function BackupSection() {
     } catch (error: unknown) {
       const text = error instanceof Error ? error.message : "Import failed.";
       push("bad", text);
+    }
+  }
+
+  async function onPushToServer() {
+    const base = apiBase.replace(/\/$/, "");
+    if (!apiEmail.trim() || !apiPassword) {
+      push("bad", "Enter API email and password to push.");
+      return;
+    }
+    setPushBusy(true);
+    localStorage.setItem(API_URL_KEY, base);
+    localStorage.setItem(API_EMAIL_KEY, apiEmail.trim());
+    try {
+      const loginRes = await fetch(`${base}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "omit",
+        body: JSON.stringify({ email: apiEmail.trim(), password: apiPassword }),
+      });
+      if (!loginRes.ok) {
+        throw new Error(loginRes.status === 423 ? "API account locked. Try later." : "API login failed.");
+      }
+      const loginBody = (await loginRes.json()) as { token?: string };
+      if (!loginBody.token) throw new Error("API login returned no token.");
+      const backup = await buildServerPushBackup();
+      const importRes = await fetch(`${base}/import/desk-backup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${loginBody.token}`,
+        },
+        credentials: "omit",
+        body: JSON.stringify(backup),
+      });
+      if (!importRes.ok) {
+        const detail = await importRes.text().catch(() => "");
+        throw new Error(detail || "Push to server failed.");
+      }
+      const result = (await importRes.json()) as {
+        counts?: { clients?: number; invoices?: number };
+      };
+      const clients = result.counts?.clients ?? 0;
+      const invoices = result.counts?.invoices ?? 0;
+      setApiPassword("");
+      push("good", `Copy pushed to server — ${clients} client(s), ${invoices} invoice(s).`);
+    } catch (error: unknown) {
+      const text =
+        error instanceof TypeError
+          ? "API unreachable. Is daftar-api running on this PC?"
+          : error instanceof Error
+            ? error.message
+            : "Push failed.";
+      push("bad", text);
+    } finally {
+      setPushBusy(false);
     }
   }
 
@@ -162,6 +237,47 @@ export function BackupSection() {
               }}
             />
           </label>
+        </div>
+
+        <hr style={{ border: 0, borderTop: "1px solid var(--line, #ddd)", margin: "0.5rem 0" }} />
+        <p className="muted" style={{ margin: 0 }}>
+          Push a copy to the local Daftar API (one-way). Desk stays on this browser. Default{" "}
+          <span className="mono">http://127.0.0.1:8787/v1</span>.
+        </p>
+        <label className="stack" style={{ gap: "0.25rem" }}>
+          <span className="muted">API base URL</span>
+          <input
+            className="input"
+            value={apiBase}
+            onChange={(event) => setApiBase(event.target.value)}
+            autoComplete="off"
+          />
+        </label>
+        <label className="stack" style={{ gap: "0.25rem" }}>
+          <span className="muted">API email</span>
+          <input
+            className="input"
+            type="email"
+            value={apiEmail}
+            onChange={(event) => setApiEmail(event.target.value)}
+            autoComplete="username"
+          />
+        </label>
+        <TokenField
+          label="API password"
+          value={apiPassword}
+          onChange={setApiPassword}
+          autoComplete="current-password"
+        />
+        <div className="row">
+          <button
+            className="btn ghost"
+            type="button"
+            disabled={pushBusy}
+            onClick={() => void onPushToServer()}
+          >
+            {pushBusy ? "Pushing…" : "Push copy to server"}
+          </button>
         </div>
       </div>
 

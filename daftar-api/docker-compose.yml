@@ -1,0 +1,23 @@
+# Daftar API local Postgres. Binds to loopback only.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: daftar-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: daftar
+      POSTGRES_PASSWORD: daftar_local_dev
+      POSTGRES_DB: daftar
+    # Hard rule: never expose on 0.0.0.0
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - daftar_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U daftar -d daftar"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  daftar_pg_data:
