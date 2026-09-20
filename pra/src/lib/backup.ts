@@ -153,6 +153,81 @@ export function mergeById<T extends { id: string }>(existing: ReadonlyArray<T>, 
   return [...map.values()];
 }
 
+export function mergeNewestWins<T extends { id: string; updatedAt?: number }>(
+  existing: ReadonlyArray<T>,
+  incoming: ReadonlyArray<T>,
+): T[] {
+  const map = new Map<string, T>();
+  for (const row of existing) map.set(row.id, row);
+  for (const row of incoming) {
+    const prev = map.get(row.id);
+    if (!prev) {
+      map.set(row.id, row);
+      continue;
+    }
+    const prevAt = prev.updatedAt ?? 0;
+    const nextAt = row.updatedAt ?? 0;
+    if (nextAt >= prevAt) map.set(row.id, row);
+  }
+  return [...map.values()];
+}
+
+export function mergeInvoices(
+  existing: ReadonlyArray<Invoice>,
+  incoming: ReadonlyArray<Invoice>,
+): Invoice[] {
+  const map = new Map<string, Invoice>();
+  for (const row of existing) map.set(row.id, row);
+  for (const row of incoming) {
+    const prev = map.get(row.id);
+    if (!prev) {
+      map.set(row.id, row);
+      continue;
+    }
+    if (prev.status === "posted" && row.status !== "posted") continue;
+    const prevAt = prev.updatedAt ?? 0;
+    const nextAt = row.updatedAt ?? 0;
+    if (nextAt >= prevAt) map.set(row.id, row);
+  }
+  return [...map.values()];
+}
+
+export function mergeClientsPreserveTokens(
+  existing: ReadonlyArray<Client>,
+  incoming: ReadonlyArray<Client>,
+): Client[] {
+  const map = new Map<string, Client>();
+  for (const row of existing) map.set(row.id, row);
+  for (const row of incoming) {
+    const prev = map.get(row.id);
+    if (!prev) {
+      map.set(row.id, row);
+      continue;
+    }
+    const prevAt = prev.updatedAt ?? 0;
+    const nextAt = row.updatedAt ?? 0;
+    if (nextAt < prevAt) continue;
+    const token =
+      row.posToken.trim() || prev.posToken.trim() ? row.posToken.trim() || prev.posToken : "";
+    map.set(row.id, { ...row, posToken: token || prev.posToken });
+  }
+  return [...map.values()];
+}
+
+export function mergeDeskSettings(
+  local: Settings | undefined,
+  incoming: Settings | undefined,
+): Settings | undefined {
+  if (!incoming) return local;
+  if (!local) return incoming;
+  return {
+    ...incoming,
+    practicePinHash: local.practicePinHash,
+    practicePinSalt: local.practicePinSalt,
+    selectedClientId: local.selectedClientId,
+  };
+}
+
 export function previewBackup(backup: DeskBackup): BackupPreview {
   const clients = backup.clients ?? [];
   const handling = backup.tokenHandling ?? "plain";
@@ -297,7 +372,34 @@ async function readSnapshot(): Promise<DeskSnapshot> {
 }
 
 function downloadJson(backup: DeskBackup, filename: string): void {
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+  // Stream per table: each array is stringified on its own, then joined into one Blob.
+  const parts: BlobPart[] = ["{\n"];
+  const entries: Array<[string, unknown]> = [
+    ["version", backup.version],
+    ["exportedAt", backup.exportedAt],
+    ["tokenHandling", backup.tokenHandling ?? null],
+    ["tokenCount", backup.tokenCount ?? null],
+    ["tokenVault", backup.tokenVault ?? null],
+    ["settings", backup.settings ?? null],
+    ["clients", backup.clients ?? []],
+    ["invoices", backup.invoices ?? []],
+    ["purchases", backup.purchases ?? []],
+    ["returns", backup.returns ?? []],
+    ["psids", backup.psids ?? []],
+    ["events", backup.events ?? []],
+    ["buyers", backup.buyers ?? []],
+    ["items", backup.items ?? []],
+    ["pctCodes", backup.pctCodes ?? []],
+    ["clientPlaces", backup.clientPlaces ?? []],
+    ["clientBanks", backup.clientBanks ?? []],
+    ["clientPosDevices", backup.clientPosDevices ?? []],
+  ];
+  entries.forEach(([key, value], index) => {
+    const comma = index < entries.length - 1 ? ",\n" : "\n";
+    parts.push(`  ${JSON.stringify(key)}: ${JSON.stringify(value)}${comma}`);
+  });
+  parts.push("}\n");
+  const blob = new Blob(parts, { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -343,7 +445,7 @@ export async function exportBackup(options: {
 }
 
 export async function applyBackup(backup: DeskBackup, mode: ImportMode): Promise<BackupPreview> {
-  const settings = backup.settings
+  const incomingSettings = backup.settings
     ? { ...backup.settings, workingPeriod: backup.settings.workingPeriod || currentPeriod() }
     : undefined;
   const incoming = {
@@ -393,26 +495,59 @@ export async function applyBackup(backup: DeskBackup, mode: ImportMode): Promise
         await db.clientPlaces.clear();
         await db.clientBanks.clear();
         await db.clientPosDevices.clear();
+        if (incomingSettings) await db.settings.put(incomingSettings);
+        if (incoming.clients.length) await db.clients.bulkPut(incoming.clients);
+        if (incoming.invoices.length) await db.invoices.bulkPut(incoming.invoices);
+        if (incoming.purchases.length) await db.purchases.bulkPut(incoming.purchases);
+        if (incoming.returns.length) await db.returns.bulkPut(incoming.returns);
+        if (incoming.psids.length) await db.psids.bulkPut(incoming.psids);
+        if (incoming.events.length) await db.events.bulkPut(incoming.events);
+        if (incoming.buyers.length) await db.buyers.bulkPut(incoming.buyers);
+        if (incoming.items.length) await db.items.bulkPut(incoming.items);
+        if (incoming.pctCodes.length) await db.pctCodes.bulkPut(incoming.pctCodes);
+        if (incoming.clientPlaces.length) await db.clientPlaces.bulkPut(incoming.clientPlaces);
+        if (incoming.clientBanks.length) await db.clientBanks.bulkPut(incoming.clientBanks);
+        if (incoming.clientPosDevices.length) await db.clientPosDevices.bulkPut(incoming.clientPosDevices);
+        return;
       }
+
+      const [localSettings, localClients, localInvoices, localPurchases, localReturns, localPsids, localEvents, localBuyers, localItems, localPct, localPlaces, localBanks, localDevices] =
+        await Promise.all([
+          db.settings.get("desk"),
+          db.clients.toArray(),
+          db.invoices.toArray(),
+          db.purchases.toArray(),
+          db.returns.toArray(),
+          db.psids.toArray(),
+          db.events.toArray(),
+          db.buyers.toArray(),
+          db.items.toArray(),
+          db.pctCodes.toArray(),
+          db.clientPlaces.toArray(),
+          db.clientBanks.toArray(),
+          db.clientPosDevices.toArray(),
+        ]);
+
+      const settings = mergeDeskSettings(localSettings, incomingSettings);
       if (settings) await db.settings.put(settings);
-      if (incoming.clients.length) await db.clients.bulkPut(incoming.clients);
-      if (incoming.invoices.length) await db.invoices.bulkPut(incoming.invoices);
-      if (incoming.purchases.length) await db.purchases.bulkPut(incoming.purchases);
-      if (incoming.returns.length) await db.returns.bulkPut(incoming.returns);
-      if (incoming.psids.length) await db.psids.bulkPut(incoming.psids);
-      if (incoming.events.length) await db.events.bulkPut(incoming.events);
-      if (incoming.buyers.length) await db.buyers.bulkPut(incoming.buyers);
-      if (incoming.items.length) await db.items.bulkPut(incoming.items);
-      if (incoming.pctCodes.length) await db.pctCodes.bulkPut(incoming.pctCodes);
-      if (incoming.clientPlaces.length) await db.clientPlaces.bulkPut(incoming.clientPlaces);
-      if (incoming.clientBanks.length) await db.clientBanks.bulkPut(incoming.clientBanks);
-      if (incoming.clientPosDevices.length) await db.clientPosDevices.bulkPut(incoming.clientPosDevices);
+      await db.clients.bulkPut(mergeClientsPreserveTokens(localClients, incoming.clients));
+      await db.invoices.bulkPut(mergeInvoices(localInvoices, incoming.invoices));
+      await db.purchases.bulkPut(mergeNewestWins(localPurchases, incoming.purchases));
+      await db.returns.bulkPut(mergeNewestWins(localReturns, incoming.returns));
+      await db.psids.bulkPut(mergeNewestWins(localPsids, incoming.psids));
+      await db.events.bulkPut(mergeById(localEvents, incoming.events));
+      await db.buyers.bulkPut(mergeNewestWins(localBuyers, incoming.buyers));
+      await db.items.bulkPut(mergeNewestWins(localItems, incoming.items));
+      await db.pctCodes.bulkPut(mergeById(localPct, incoming.pctCodes));
+      await db.clientPlaces.bulkPut(mergeNewestWins(localPlaces, incoming.clientPlaces));
+      await db.clientBanks.bulkPut(mergeNewestWins(localBanks, incoming.clientBanks));
+      await db.clientPosDevices.bulkPut(mergeNewestWins(localDevices, incoming.clientPosDevices));
     },
   );
   await logEvent({
     kind: "backup.imported",
     title: mode === "merge" ? "Desk backup merged" : "Desk backup imported",
-    detail: mode === "merge" ? "Merged by id" : "Replaced desk",
+    detail: mode === "merge" ? "Merged by id (newest wins; posted protected)" : "Replaced desk",
   });
   const written = await db.settings.get("desk");
   const { hasPracticePin, lockPractice } = await import("../domain/settings");

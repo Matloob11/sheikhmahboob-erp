@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Client, DeskEvent, Settings } from "../types";
+import type { Client, DeskEvent, Invoice, Settings } from "../types";
 
 const { deskState, lockPractice } = vi.hoisted(() => ({
   deskState: { settings: undefined as Settings | undefined },
@@ -46,6 +46,9 @@ import {
   assembleBackup,
   importBackup,
   mergeById,
+  mergeClientsPreserveTokens,
+  mergeDeskSettings,
+  mergeInvoices,
   parseBackupText,
   prepareImport,
   previewBackup,
@@ -202,6 +205,26 @@ describe("backup preview and merge", () => {
       { id: "b", name: "new-b" },
       { id: "c", name: "added" },
     ]);
+  });
+
+  it("never downgrades a posted invoice on merge", () => {
+    const existing = [{ id: "inv_1", status: "posted", updatedAt: 1, usin: "A" } as Invoice];
+    const incoming = [{ id: "inv_1", status: "draft", updatedAt: 99, usin: "A" } as Invoice];
+    expect(mergeInvoices(existing, incoming)[0]?.status).toBe("posted");
+  });
+
+  it("keeps local token and PIN/selected client on merge helpers", () => {
+    const existing = [client("cli_1", "local-token")];
+    existing[0]!.updatedAt = 1;
+    const incoming = [{ ...client("cli_1", ""), updatedAt: 99 }];
+    expect(mergeClientsPreserveTokens(existing, incoming)[0]?.posToken).toBe("local-token");
+    const merged = mergeDeskSettings(
+      { id: "desk", firmName: "Local", workingPeriod: "2026-09", practicePinHash: "h", practicePinSalt: "s", selectedClientId: "cli_keep" },
+      { id: "desk", firmName: "Incoming", workingPeriod: "2026-08", practicePinHash: "other", practicePinSalt: "x", selectedClientId: "cli_other" },
+    );
+    expect(merged?.firmName).toBe("Incoming");
+    expect(merged?.practicePinHash).toBe("h");
+    expect(merged?.selectedClientId).toBe("cli_keep");
   });
 
   it("strips tokens and redacts activity on export", async () => {

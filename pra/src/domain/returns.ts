@@ -2,6 +2,7 @@ import { db } from "../db";
 import { notifyDb } from "../hooks/useLive";
 import { newId } from "../lib/ids";
 import { money } from "../lib/money";
+import { assertPeriodUnlocked } from "./periodLock";
 import { logEvent } from "./events";
 import { isCnic, validatePurchaseDraft } from "./validate";
 import type { Purchase, ReturnPeriod, ReturnStatus } from "../types";
@@ -35,6 +36,11 @@ export function validatePurchaseExtras(input: Pick<PurchaseDraft, "supplierCnic"
 export async function savePurchase(input: PurchaseDraft): Promise<{ purchase?: Purchase; errors: string[] }> {
   const errors = [...validatePurchaseDraft(input), ...validatePurchaseExtras(input)];
   if (errors.length) return { errors };
+  try {
+    await assertPeriodUnlocked(input.clientId, input.period);
+  } catch (error) {
+    return { errors: [error instanceof Error ? error.message : "Period is locked."] };
+  }
   const taxCharged = money((input.saleValue * input.taxRate) / 100);
   const now = Date.now();
   const extras = {
@@ -98,7 +104,16 @@ export async function addPurchase(input: PurchaseDraft): Promise<{ purchase?: Pu
 }
 
 export async function removePurchase(id: string): Promise<void> {
+  const prev = await db.purchases.get(id);
+  if (!prev) return;
+  await assertPeriodUnlocked(prev.clientId, prev.period);
   await db.purchases.delete(id);
+  await logEvent({
+    kind: "purchase.removed",
+    clientId: prev.clientId,
+    title: `Removed Annex A ${prev.invoiceNo}`,
+    detail: prev.supplierName,
+  });
   notifyDb();
 }
 

@@ -35,28 +35,29 @@ export function sellerPrintLines(client: Client, firmName = ""): SellerPrintLine
 
 export function printBanner(invoice: Invoice): PrintBanner {
   if (invoice.status === "posted") {
-    const env =
-      invoice.postedEnvironment === "sandbox"
-        ? "sandbox"
-        : invoice.postedEnvironment === "production"
-          ? "production"
-          : "";
-    const envBit = env ? ` · ${env}` : "";
+    if (invoice.postedEnvironment === "sandbox") {
+      return {
+        tone: "posted",
+        label: invoice.fiscalNumber
+          ? `SANDBOX — test only · ${invoice.fiscalNumber}`
+          : "SANDBOX — test only",
+      };
+    }
     return {
       tone: "posted",
       label: invoice.fiscalNumber
-        ? `Posted${envBit} · ${invoice.fiscalNumber}`
-        : `Posted${envBit}`,
+        ? `Posted · fiscal ${invoice.fiscalNumber}`
+        : "Posted",
     };
   }
   if (invoice.status === "unknown") {
-    return { tone: "failed", label: "Unclear — check IRIS before posting again" };
+    return { tone: "failed", label: "DRAFT — not a tax invoice · unclear PRA result" };
   }
   if (invoice.status === "failed") {
-    return { tone: "failed", label: "Not accepted by PRA" };
+    return { tone: "failed", label: "DRAFT — not a tax invoice · not accepted by PRA" };
   }
   if (invoice.status === "validated") {
-    return { tone: "draft", label: "Validated — not posted" };
+    return { tone: "draft", label: "DRAFT — not a tax invoice · validated only" };
   }
-  return { tone: "draft", label: "Draft" };
+  return { tone: "draft", label: "DRAFT — not a tax invoice" };
 }

@@ -106,6 +106,17 @@ describe("removeClientFile", () => {
     expect(stores.buyers.has("buy_other")).toBe(true);
   });
 
+  it("blocks cascade when a posted invoice exists", async () => {
+    stores.invoices.set("inv_posted", {
+      id: "inv_posted",
+      clientId: "cli_1",
+      status: "posted",
+    } as Invoice);
+    await expect(removeClientFile("cli_1", true)).rejects.toThrow(/posted or unclear/i);
+    expect(stores.clients.has("cli_1")).toBe(true);
+    expect(stores.invoices.has("inv_posted")).toBe(true);
+  });
+
   it("leaves related papers when cascade is off", async () => {
     await removeClientFile("cli_1", false);
     expect(stores.clients.has("cli_1")).toBe(false);

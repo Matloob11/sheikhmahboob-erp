@@ -47,6 +47,13 @@ vi.mock("../db", () => {
   return {
     db: {
       invoices: table,
+      returns: {
+        where: () => ({
+          equals: () => ({
+            toArray: async () => [],
+          }),
+        }),
+      },
       transaction: async (_mode: string, _tables: unknown, fn: () => Promise<unknown>) => fn(),
     },
     emptyInvoice: (clientId: string, usin: string): Invoice => ({

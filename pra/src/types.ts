@@ -20,6 +20,7 @@ export type EventKind =
   | "purchase.updated"
   | "return.ready"
   | "return.filed"
+  | "return.unlocked"
   | "psid.saved"
   | "psid.removed"
   | "backup.imported"
@@ -28,7 +29,8 @@ export type EventKind =
   | "item.saved"
   | "item.removed"
   | "pct.saved"
-  | "pct.removed";
+  | "pct.removed"
+  | "purchase.removed";
 
 export interface Settings {
   id: "desk";

@@ -12,6 +12,7 @@ import { useNotice } from "../context/NoticeContext";
 import { isBlockedCredit, type FileLedger } from "../domain/ledger";
 import { sectionPath } from "../domain/nav";
 import { markReturn, removePurchase, savePurchase } from "../domain/returns";
+import { unlockPeriod } from "../domain/periodLock";
 import { formatLongDay, periodLabel } from "../lib/ids";
 import { parseAmount, pkr } from "../lib/money";
 import type { Purchase, ReturnPeriod } from "../types";
@@ -152,6 +153,7 @@ export function ReturnsPage() {
   const [purchase, setPurchase] = useState(emptyPurchaseForm(period));
   const [addingPurchase, setAddingPurchase] = useState(false);
   const [pendingPurchase, setPendingPurchase] = useState<string | null>(null);
+  const [confirmUnlock, setConfirmUnlock] = useState(false);
   const purchaseDate = purchase.invoiceDate.startsWith(period) ? purchase.invoiceDate : `${period}-01`;
   const annexC = ledger
     ? ledger.sales.flatMap((invoice) => {
@@ -378,6 +380,11 @@ export function ReturnsPage() {
             >
               Mark filed on IRIS
             </button>
+            {filing?.status === "filed" ? (
+              <button className="btn" type="button" onClick={() => setConfirmUnlock(true)}>
+                Unlock period
+              </button>
+            ) : null}
           </div>
         </Panel>
       ) : null}
@@ -646,6 +653,22 @@ export function ReturnsPage() {
           </div>
         </Panel>
       ) : null}
+      <Confirm
+        open={confirmUnlock}
+        danger
+        title="Unlock this period?"
+        body="Invoices and purchases can change again. Confirm only if you meant to reopen the return."
+        confirmLabel="Unlock"
+        onCancel={() => setConfirmUnlock(false)}
+        onConfirm={() => {
+          setConfirmUnlock(false);
+          void unlockPeriod(client.id, period)
+            .then(() => push("good", `${periodLabel(period)} unlocked.`))
+            .catch((error: unknown) =>
+              push("bad", error instanceof Error ? error.message : "Could not unlock."),
+            );
+        }}
+      />
       <Confirm
         open={Boolean(pendingPurchase)}
         danger

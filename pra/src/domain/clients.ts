@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { notifyDb } from "../hooks/useLive";
 import { newId } from "../lib/ids";
+import { uiStrings } from "../lib/uiStrings";
 import { logEvent } from "./events";
 import { patchSettings } from "./settings";
 import { hasRegistrationNo, isCnic, validateClient } from "./validate";
@@ -93,8 +94,12 @@ export const CLIENT_CASCADE_STORES = [
 export async function removeClientFile(id: string, cascade: boolean): Promise<void> {
   const client = await db.clients.get(id);
   if (cascade) {
-    const [invoices, purchases, returns, psids, buyers, items, events, places, banks, devices] = await Promise.all([
-      db.invoices.where("clientId").equals(id).toArray(),
+    const invoices = await db.invoices.where("clientId").equals(id).toArray();
+    const protectedRow = invoices.find((row) => row.status === "posted" || row.status === "unknown");
+    if (protectedRow) {
+      throw new Error(uiStrings.clientCascadeBlocked);
+    }
+    const [purchases, returns, psids, buyers, items, events, places, banks, devices] = await Promise.all([
       db.purchases.where("clientId").equals(id).toArray(),
       db.returns.where("clientId").equals(id).toArray(),
       db.psids.where("clientId").equals(id).toArray(),

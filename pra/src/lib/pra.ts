@@ -5,6 +5,7 @@ import {
 } from "../types";
 import { digitsOnly } from "./ids";
 import { money } from "./money";
+import { uiStrings } from "./uiStrings";
 
 /** POS manual §6.1 sample JSON uses `YYYY-MM-DD HH:MM:SS`; the field table also shows `.mmm`. */
 export const PRA_DATE_TIME = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,3})?$/;
@@ -374,14 +375,12 @@ export function mapPraOutcome(
   }
 
   if (duplicate) {
-    const nextAction = realFiscal
-      ? "Do not post again. PRA already has this USIN."
-      : "Do not post again. Look up this USIN on IRIS → IMS Fiscal Report if you need the fiscal number.";
+    const nextAction = realFiscal ? uiStrings.praDuplicateWithFiscal : uiStrings.praDuplicateLookup;
     return {
       ok: false,
       fiscalNumber: realFiscal ? fiscalNumber : "",
       code,
-      message: message || "PRA already has this USIN.",
+      message: message || uiStrings.praAlreadyHasUsin,
       nextAction,
       alreadyExists: true,
       kind: "already_exists",
@@ -398,8 +397,8 @@ export function mapPraOutcome(
       ok: false,
       fiscalNumber: "",
       code,
-      message: message || (httpStatus ? `HTTP ${httpStatus}` : "PRA refused the token or POS ID."),
-      nextAction: "Update the eIMS token and POS ID on the client file, then retry this USIN once.",
+      message: message || (httpStatus ? `HTTP ${httpStatus}` : uiStrings.praRefusedToken),
+      nextAction: uiStrings.praAuthNext,
       alreadyExists: false,
       kind: "auth",
     };
@@ -409,8 +408,8 @@ export function mapPraOutcome(
       ok: false,
       fiscalNumber: "",
       code,
-      message: message || "PRA refused the production IP.",
-      nextAction: "Email eims@pra.punjab.gov.pk with PNTN, business name, POS ID, server IP, and location.",
+      message: message || uiStrings.praRefusedIp,
+      nextAction: uiStrings.praIpNext,
       alreadyExists: false,
       kind: "ip",
     };
@@ -423,8 +422,8 @@ export function mapPraOutcome(
       ok: false,
       fiscalNumber: "",
       code,
-      message: message || "PRA rejected the invoice payload.",
-      nextAction: "Fix the fields PRA named, validate locally, then retry.",
+      message: message || uiStrings.praRejectedPayload,
+      nextAction: uiStrings.praValidationNext,
       alreadyExists: false,
       kind: "validation",
     };
@@ -435,7 +434,7 @@ export function mapPraOutcome(
     fiscalNumber: "",
     code,
     message: message || (httpStatus ? `HTTP ${httpStatus}` : "PRA rejected the invoice."),
-    nextAction: "Read the PRA message. Retry only if this USIN was not accepted.",
+    nextAction: uiStrings.praGenericNext,
     alreadyExists: false,
     kind: "rejected",
   };

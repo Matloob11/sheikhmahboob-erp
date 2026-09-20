@@ -2,6 +2,7 @@ import { db, emptyInvoice } from "../db";
 import { notifyDb } from "../hooks/useLive";
 import type { ImportedSaleRow } from "../lib/excel";
 import { newId, nextUsin } from "../lib/ids";
+import { assertPeriodUnlocked } from "./periodLock";
 import { logEvent } from "./events";
 import {
   buildPayload,
@@ -314,6 +315,7 @@ export async function saveInvoiceDraft(client: Client, invoice: Invoice): Promis
   const current = stored ?? invoice;
   const gate = draftWriteGate(current);
   if (!gate.allow) return current;
+  await assertPeriodUnlocked(client.id, invoice.dateTime);
   const next = withTotals({ ...invoice, status: current.status, inFlight: false }, client.id);
   const duplicate = await findDuplicateUsin(client.id, next.usin, next.id);
   if (duplicate) return current;
@@ -439,6 +441,8 @@ export async function submitInvoice(
   const current = stored ?? invoice;
   const gate = submitGate(current);
   if (!gate.allow) return gateSubmitResult(current, gate);
+
+  await assertPeriodUnlocked(client.id, invoice.dateTime);
 
   const prepared = withTotals({ ...invoice, status: current.status, inFlight: false }, client.id);
   const errors = [...validateInvoice(client, prepared)];
@@ -882,6 +886,7 @@ export async function removeInvoiceDraft(invoice: Invoice): Promise<void> {
     }
     throw new Error("This invoice is being sent. Wait for PRA before removing it.");
   }
+  await assertPeriodUnlocked(invoice.clientId, invoice.dateTime);
   await db.invoices.delete(invoice.id);
   await logEvent({
     kind: "invoice.removed",

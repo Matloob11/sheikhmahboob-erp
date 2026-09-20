@@ -42,12 +42,17 @@ describe("sellerPrintLines", () => {
 });
 
 describe("printBanner", () => {
-  it("marks draft vs posted vs failed", () => {
+  it("marks draft vs posted vs failed with clerk wording", () => {
     const draft = { status: "draft", fiscalNumber: "" } as Invoice;
-    const posted = { status: "posted", fiscalNumber: "9001" } as Invoice;
+    const posted = { status: "posted", fiscalNumber: "9001", postedEnvironment: "production" } as Invoice;
+    const sandbox = { status: "posted", fiscalNumber: "9001", postedEnvironment: "sandbox" } as Invoice;
     const failed = { status: "failed", fiscalNumber: "" } as Invoice;
-    expect(printBanner(draft)).toEqual({ tone: "draft", label: "Draft" });
-    expect(printBanner(posted)).toEqual({ tone: "posted", label: "Posted · 9001" });
-    expect(printBanner(failed)).toEqual({ tone: "failed", label: "Not accepted by PRA" });
+    expect(printBanner(draft)).toEqual({ tone: "draft", label: "DRAFT — not a tax invoice" });
+    expect(printBanner(posted)).toEqual({ tone: "posted", label: "Posted · fiscal 9001" });
+    expect(printBanner(sandbox)).toEqual({ tone: "posted", label: "SANDBOX — test only · 9001" });
+    expect(printBanner(failed)).toEqual({
+      tone: "failed",
+      label: "DRAFT — not a tax invoice · not accepted by PRA",
+    });
   });
 });
