@@ -197,7 +197,7 @@ export function InvoiceEditorPage() {
   }, [locked, saveDraft]);
 
   const totals = useMemo(
-    () => (invoice ? totalsFromItems(invoice.items, invoice.discount) : null),
+    () => (invoice ? totalsFromItems(invoice.items) : null),
     [invoice],
   );
 
@@ -212,7 +212,7 @@ export function InvoiceEditorPage() {
     const items = invoice.items.map((line) =>
       line.id === id ? recalcLine({ ...line, ...partial }) : line,
     );
-    patch({ items, ...totalsFromItems(items, invoice.discount) });
+    patch({ items, ...totalsFromItems(items) });
   }
 
   async function validateOnly() {
@@ -624,16 +624,12 @@ export function InvoiceEditorPage() {
                 />
                 Reverse charge
               </label>
-              <AmountInput
-                label="Header discount"
-                disabled={locked}
-                value={invoice.discount}
-                onValueChange={(discount) =>
-                  patch({
-                    discount,
-                    ...totalsFromItems(invoice.items, discount),
-                  })
-                }
+              <TextInput
+                label="Header discount (sum of lines)"
+                disabled
+                value={String(invoice.discount)}
+                hint="Edit line discounts; this total follows them."
+                readOnly
               />
               <TextInput
                 label="Ref USIN (debit/credit)"
@@ -683,7 +679,7 @@ export function InvoiceEditorPage() {
                 disabled={locked}
                 onClick={() => {
                   const items = [...invoice.items, blankLine(invoice.items.length + 1, taxDefaults)];
-                  patch({ items, ...totalsFromItems(items, invoice.discount) });
+                  patch({ items, ...totalsFromItems(items) });
                 }}
               >
                 Add line
@@ -697,7 +693,7 @@ export function InvoiceEditorPage() {
                 onPick={(item) => {
                   const next = applyItemToLine(blankLine(invoice.items.length + 1, taxDefaults), item);
                   const items = [...invoice.items, recalcLine(next)];
-                  patch({ items, ...totalsFromItems(items, invoice.discount) });
+                  patch({ items, ...totalsFromItems(items) });
                 }}
               />
               <PctPicker
@@ -706,7 +702,7 @@ export function InvoiceEditorPage() {
                 onPick={(rate) => {
                   const next = applyPctToLine(blankLine(invoice.items.length + 1, taxDefaults), rate);
                   const items = [...invoice.items, recalcLine(next)];
-                  patch({ items, ...totalsFromItems(items, invoice.discount) });
+                  patch({ items, ...totalsFromItems(items) });
                 }}
               />
             </div>
@@ -805,7 +801,7 @@ export function InvoiceEditorPage() {
                           disabled={locked}
                           onClick={() => {
                             const items = invoice.items.filter((item) => item.id !== line.id);
-                            patch({ items, ...totalsFromItems(items, invoice.discount) });
+                            patch({ items, ...totalsFromItems(items) });
                           }}
                         >
                           Remove

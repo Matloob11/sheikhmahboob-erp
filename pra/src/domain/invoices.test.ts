@@ -405,7 +405,7 @@ describe("totals and USIN", () => {
       "cli_1",
     );
     expect(invoice.furtherTax).toBe(50);
-    expect(invoice.furtherTax).toBe(totalsFromItems(invoice.items, invoice.discount).furtherTax);
+    expect(invoice.furtherTax).toBe(totalsFromItems(invoice.items).furtherTax);
   });
 
   it("trims USIN so the compound index matches", () => {
@@ -564,7 +564,7 @@ describe("unknown reconcile and USIN lock", () => {
 });
 
 describe("excel import discount", () => {
-  it("applies HeaderDiscount to the invoice header and bill amount", async () => {
+  it("applies HeaderDiscount to the first line when line discounts are empty", async () => {
     parseSalesWorkbook.mockResolvedValueOnce([
       {
         USIN: "DFT-IMP-1",
@@ -590,9 +590,9 @@ describe("excel import discount", () => {
     const count = await importSalesFile(client, { arrayBuffer: async () => new ArrayBuffer(0) } as File);
     expect(count).toBe(1);
     const imported = [...invoiceStore.values()][0];
+    expect(imported?.items[0]?.discount).toBe(100);
     expect(imported?.discount).toBe(100);
-    expect(imported?.furtherTax).toBe(0);
-    expect(imported?.totalBillAmount).toBe(totalsFromItems(imported?.items ?? [], 100).totalBillAmount);
+    expect(imported?.totalBillAmount).toBe(totalsFromItems(imported?.items ?? []).totalBillAmount);
   });
 
   it("previewSalesImport flags bad PCT and a duplicate USIN without saving", async () => {

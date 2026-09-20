@@ -35,12 +35,13 @@ export async function findDuplicateUsin(
 }
 
 export function withTotals(invoice: Invoice, clientId: string): Invoice {
+  const totals = totalsFromItems(invoice.items);
   return {
     ...invoice,
     clientId,
     usin: invoice.usin.trim(),
     refUsin: invoice.refUsin.trim(),
-    ...totalsFromItems(invoice.items, invoice.discount),
+    ...totals,
     attemptCount: invoice.attemptCount ?? 0,
     lastCode: invoice.lastCode ?? "",
     inFlight: invoice.inFlight === true,
@@ -228,8 +229,8 @@ export function posChecks(client: Client): PosCheck[] {
   if (client.environment === "production") {
     checks.push({
       tone: "info",
-      title: "IP whitelist and /pra-ims TLS are ops leftovers",
-      body: "Whitelist is not approved. Production PostData can fail even with a real token. Email eims@pra.punjab.gov.pk — see Daftar README leftovers.",
+      title: "PRA may still block this server’s IP",
+      body: "Live posts go through this site’s locked proxy. Until PRA whitelists 187.53.143.235, production sends can fail even with a real token. Email eims@pra.punjab.gov.pk from Settings → About.",
     });
   }
   return checks;
@@ -696,6 +697,10 @@ function draftFromImportedLines(client: Client, usin: string, lines: ImportedSal
     }),
   );
   const headerDiscount = first.HeaderDiscount ?? 0;
+  const lineSum = items.reduce((sum, line) => sum + line.discount, 0);
+  if (lineSum === 0 && headerDiscount > 0 && items[0]) {
+    items[0] = recalcLine({ ...items[0], discount: headerDiscount });
+  }
   return withTotals(
     {
       ...draft,
@@ -712,7 +717,7 @@ function draftFromImportedLines(client: Client, usin: string, lines: ImportedSal
       reverseCharge: first.ReverseCharge === true,
       saleType: first.SaleType?.trim() || "Services",
       taxpayerType: first.TaxpayerType ?? "",
-      discount: headerDiscount,
+      discount: 0,
       refUsin: first.RefUSIN,
       items,
       status: "draft",

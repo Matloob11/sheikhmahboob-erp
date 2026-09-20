@@ -82,39 +82,45 @@ export function unknownPraResult(message: string, raw = ""): PraPostResult {
   };
 }
 
+export function lineDiscountTotal(items: ReadonlyArray<InvoiceLine>): number {
+  return money(items.reduce((sum, line) => sum + money(line.discount), 0));
+}
+
 export function recalcLine(line: InvoiceLine): InvoiceLine {
   const saleValue = money(line.saleValue);
-  const taxCharged = money(saleValue * (line.taxRate / 100));
+  const discount = money(Math.min(Math.max(0, line.discount), Math.max(0, saleValue)));
+  const taxable = money(saleValue - discount);
+  const taxCharged = money(taxable * (line.taxRate / 100));
   const furtherTax = money(line.furtherTax);
-  const discount = money(line.discount);
   return {
     ...line,
     saleValue,
     discount,
     furtherTax,
     taxCharged,
-    totalAmount: money(saleValue + taxCharged + furtherTax),
+    totalAmount: money(taxable + taxCharged + furtherTax),
   };
 }
 
 export function totalsFromItems(
   items: ReadonlyArray<InvoiceLine>,
-  headerDiscount: number,
+  _headerDiscount?: number,
 ): Pick<
   Invoice,
-  "totalQuantity" | "totalSaleValue" | "totalTaxCharged" | "furtherTax" | "totalBillAmount"
+  "totalQuantity" | "totalSaleValue" | "totalTaxCharged" | "furtherTax" | "totalBillAmount" | "discount"
 > {
   const lines = items.map(recalcLine);
   const totalQuantity = money(lines.reduce((sum, line) => sum + line.quantity, 0));
   const totalSaleValue = money(lines.reduce((sum, line) => sum + line.saleValue, 0));
   const totalTaxCharged = money(lines.reduce((sum, line) => sum + line.taxCharged, 0));
   const furtherTax = money(lines.reduce((sum, line) => sum + line.furtherTax, 0));
-  const discount = money(headerDiscount);
+  const discount = lineDiscountTotal(lines);
   return {
     totalQuantity,
     totalSaleValue,
     totalTaxCharged,
     furtherTax,
+    discount,
     totalBillAmount: money(totalSaleValue + totalTaxCharged + furtherTax - discount),
   };
 }
@@ -140,7 +146,7 @@ export function isPraDuplicateText(value: string): boolean {
 }
 
 export function buildPayload(client: Client, invoice: Invoice): PraInvoicePayload {
-  const totals = totalsFromItems(invoice.items, invoice.discount);
+  const totals = totalsFromItems(invoice.items);
   const refUsin = invoice.refUsin.trim() || null;
   return {
     InvoiceNumber: "",
@@ -155,7 +161,7 @@ export function buildPayload(client: Client, invoice: Invoice): PraInvoicePayloa
     TotalQuantity: totals.totalQuantity,
     TotalSaleValue: totals.totalSaleValue,
     TotalTaxCharged: totals.totalTaxCharged,
-    Discount: money(invoice.discount),
+    Discount: totals.discount,
     FurtherTax: totals.furtherTax,
     PaymentMode: invoice.paymentMode,
     RefUSIN: refUsin,
@@ -236,9 +242,15 @@ export function validateInvoice(client: Client, invoice: Invoice): string[] {
     }
     if (item.saleValue < 0) errors.push(`Line ${n}: sale value cannot be negative.`);
     if (item.discount < 0) errors.push(`Line ${n}: discount cannot be negative.`);
+    if (item.discount > item.saleValue) {
+      errors.push(`Line ${n}: discount cannot exceed sale value.`);
+    }
     if (item.furtherTax < 0) errors.push(`Line ${n}: further tax cannot be negative.`);
   });
-  const totals = totalsFromItems(invoice.items, invoice.discount);
+  const totals = totalsFromItems(invoice.items);
+  if (money(invoice.discount) !== totals.discount) {
+    errors.push("Header discount must equal the sum of line discounts.");
+  }
   if (totals.totalBillAmount < 0) errors.push("Bill amount cannot be negative.");
   return errors;
 }

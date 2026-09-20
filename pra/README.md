@@ -45,7 +45,9 @@ The script sets `MSYS_NO_PATHCONV=1` so Git Bash does not rewrite `--base=/pra/`
 Nginx already serves:
 
 - `/pra` → static SPA (`try_files` → `index.html`)
-- `/pra-ims/` → reverse proxy to `https://ims.pral.com.pk/`
+- `/pra-ims/…/PostData` → locked reverse proxy to the two documented PRA PostData URLs only
+
+Repo copy of the live vhost: `ops/nginx/srv1992968-sheikhmahboob.conf`.
 
 ## Official PRA endpoints
 
@@ -55,7 +57,7 @@ From the [POS Component user manual](https://e.pra.punjab.gov.pk/templates/POS_C
 - Production: `https://ims.pral.com.pk/ims/production/api/Live/PostData`
 - Header: `Authorization: Bearer <token>`
 
-Daftar posts to `/pra-ims` first. If that returns network failure, HTTP 404/5xx, or HTML (Frappe/nginx), it falls back to the remote PRA URL. Frappe HTML is not treated as a PRA reject.
+Hosted Daftar posts **only** to same-origin `/pra-ims/ims/{sandbox|production}/api/Live/PostData`. There is no browser fallback to `ims.pral.com.pk` (that would leave from the laptop IP and bypass the whitelist). Timeout / 502 / HTML → outcome **unknown**; reconcile from IRIS → IMS Fiscal Report. Other `/pra-ims` paths return 404. `POST` without `Origin: https://sheikhmahboob.com` returns 403. Rate limit 120/min per IP; body cap 256 KB.
 
 A post is success only when PRA returns Code `100` or `00`. Sandbox demo POS IDs often return Code `100` and `InvoiceNumber: "Not Available"` — accepted in sandbox. A lone fiscal number that is not `"Not Available"` is **not** enough if the body is an error. `"Not Available"` by itself is not success.
 
@@ -121,8 +123,8 @@ Do not seed Ahmad Traders or any real taxpayer into the hosted app.
 These are **not** done. Do not treat them as shipped.
 
 1. **Whitelist approval** — send the email above. Until PRA replies, production PostData can fail even with a real token.
-2. **VPS → `ims.pral.com.pk` TLS** — `/pra-ims` is nginx (not Frappe). SNI, IPv4 bind, TLS 1.2/1.3, and session-reuse-off are already on `sheikhmahboob.conf`. That is not enough: TCP to `103.125.60.124:443` succeeds, then PRA sends FIN (0 TLS bytes) — `SSL_ERROR_SYSCALL` / 502. `www.pral.com.pk` and FBR TLS from this VPS work. After PRA allowlists `187.53.143.235` (or stops closing the handshake), confirm sandbox PostData through `/pra-ims` returns PRA JSON, not 502 HTML. The app already falls back to the remote PRA URL.
+2. **VPS → `ims.pral.com.pk` TLS** — the locked `/pra-ims` PostData proxy is nginx (not Frappe). SNI, IPv4 bind, TLS 1.2/1.3, and session-reuse-off are on `sheikhmahboob.conf`. That is not enough: TCP to PRA can succeed, then PRA closes the handshake — `SSL_ERROR_SYSCALL` / 502. After PRA allowlists `187.53.143.235`, confirm sandbox PostData through `/pra-ims` returns PRA JSON, not 502. The desk does **not** fall back to a remote PRA URL.
 3. **Real POS token** — put the client’s IRIS eIMS token and POS ID on the client file. Demo POS `100000` + the published sandbox token is not a live client.
 4. **First live invoice** — after 1–3, post one real invoice on production and confirm the fiscal number on IRIS → IMS Fiscal Report.
 5. **PWA** — the hosted desk can be installed (manifest + service worker). The worker does not cache `/pra-ims` and is not an offline post queue.
-6. **Track B** — no staff login, no cloud sync server, no GetData. nginx `/pra-ims` TLS knobs were applied 18 Sep 2026; the 502 remains a PRA-side close.
+6. **Track B** — no staff login, no cloud sync server, no GetData. nginx `/pra-ims` is locked to PostData only (Sep 2026); the 502 remains a PRA-side close until whitelist.

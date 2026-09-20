@@ -82,10 +82,94 @@ function sampleInvoice(partial: Partial<Invoice> = {}): Invoice {
   };
 }
 
+describe("line discount tax base", () => {
+  it("charges tax on sale minus discount", () => {
+    const line = recalcLine({
+      id: "ln_1",
+      itemCode: "IT_001",
+      itemName: "Fee",
+      quantity: 1,
+      pctCode: "00000000",
+      taxRate: 16,
+      saleValue: 10000,
+      discount: 1000,
+      furtherTax: 0,
+      taxCharged: 0,
+      totalAmount: 0,
+    });
+    expect(line.taxCharged).toBe(1440);
+    expect(line.totalAmount).toBe(10440);
+  });
+
+  it("sets header Discount to the sum of line discounts in the payload", () => {
+    const invoice = sampleInvoice({
+      discount: 0,
+      items: [
+        recalcLine({
+          id: "ln_1",
+          itemCode: "IT_001",
+          itemName: "A",
+          quantity: 1,
+          pctCode: "00000000",
+          taxRate: 16,
+          saleValue: 10000,
+          discount: 100,
+          furtherTax: 0,
+          taxCharged: 0,
+          totalAmount: 0,
+        }),
+        recalcLine({
+          id: "ln_2",
+          itemCode: "IT_002",
+          itemName: "B",
+          quantity: 1,
+          pctCode: "00000000",
+          taxRate: 16,
+          saleValue: 5000,
+          discount: 50,
+          furtherTax: 0,
+          taxCharged: 0,
+          totalAmount: 0,
+        }),
+      ],
+    });
+    const payload = buildPayload(client, invoice);
+    expect(payload.Discount).toBe(150);
+    expect(payload.Items[0]?.TaxCharged).toBe(1584);
+    expect(payload.Items[1]?.TaxCharged).toBe(792);
+    expect(payload.TotalTaxCharged).toBe(2376);
+  });
+
+  it("rejects a header discount that does not equal the line sum", () => {
+    const invoice = sampleInvoice({
+      discount: 999,
+      items: [
+        recalcLine({
+          id: "ln_1",
+          itemCode: "IT_001",
+          itemName: "Fee",
+          quantity: 1,
+          pctCode: "00000000",
+          taxRate: 16,
+          saleValue: 10000,
+          discount: 100,
+          furtherTax: 0,
+          taxCharged: 0,
+          totalAmount: 0,
+        }),
+      ],
+    });
+    expect(validateInvoice(client, invoice)).toContain(
+      "Header discount must equal the sum of line discounts.",
+    );
+  });
+});
+
 describe("PRA payload", () => {
   it("matches the POS manual PostData shape", () => {
     const invoice = sampleInvoice({
       furtherTax: 50,
+      discount: 100,
       items: [
         recalcLine({
           id: "ln_1",
@@ -115,13 +199,13 @@ describe("PRA payload", () => {
     expect(payload.InvoiceType).toBe(1);
     expect(payload.RefUSIN).toBeNull();
     expect(payload.FurtherTax).toBe(50);
-    expect(payload.Discount).toBe(0);
-    expect(payload.Items[0]?.TaxCharged).toBe(1600);
+    expect(payload.Discount).toBe(100);
+    expect(payload.Items[0]?.TaxCharged).toBe(1584);
     expect(payload.Items[0]?.FurtherTax).toBe(50);
     expect(payload.Items[0]?.Discount).toBe(100);
     expect(payload.Items[0]?.InvoiceType).toBe(1);
     expect(payload.Items[0]?.RefUSIN).toBeNull();
-    expect(payload.TotalTaxCharged).toBe(1600);
+    expect(payload.TotalTaxCharged).toBe(1584);
     expect(payload).not.toHaveProperty("ExtraTax");
     expect(payload).not.toHaveProperty("STWithheld");
     expect(JSON.stringify(payload)).not.toMatch(/ExtraTax|withheld/i);

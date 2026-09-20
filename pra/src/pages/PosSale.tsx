@@ -64,7 +64,7 @@ export function PosSalePage() {
   const taxDefaults = useMemo(() => resolveTaxDefaults(pctRates, activeItems), [pctRates, activeItems]);
   const checks = selected ? posChecks(selected) : [];
   const line = invoice?.items[0];
-  const totals = invoice ? totalsFromItems(invoice.items, invoice.discount) : null;
+  const totals = invoice ? totalsFromItems(invoice.items) : null;
   const locked = invoice?.status === "posted";
   const sending = Boolean(busy || invoice?.inFlight);
   const pickedBuyer = buyers.find((row) => row.id === invoice?.buyerId);

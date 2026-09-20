@@ -97,6 +97,7 @@ export function InvoicePrint({ invoice, client }: { invoice: Invoice; client: Cl
             <th>PCT</th>
             <th>Rate</th>
             <th>Sale</th>
+            <th>Discount</th>
             <th>Tax</th>
             <th>Total</th>
           </tr>
@@ -110,6 +111,7 @@ export function InvoicePrint({ invoice, client }: { invoice: Invoice; client: Cl
               <td className="mono">{line.pctCode}</td>
               <td className="mono">{line.taxRate}%</td>
               <td className="mono">{pkr(line.saleValue)}</td>
+              <td className="mono">{pkr(line.discount)}</td>
               <td className="mono">{pkr(line.taxCharged)}</td>
               <td className="mono">{pkr(line.totalAmount)}</td>
             </tr>
