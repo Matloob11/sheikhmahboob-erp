@@ -278,6 +278,41 @@ export function BackupSection() {
           >
             {pushBusy ? "Pushing…" : "Push copy to server"}
           </button>
+          <button
+            className="btn ghost"
+            type="button"
+            disabled={pushBusy}
+            onClick={() => {
+              void (async () => {
+                if (!apiEmail.trim() || !apiPassword) {
+                  push("bad", "Enter API email and password to sync.");
+                  return;
+                }
+                setPushBusy(true);
+                try {
+                  const { syncPushWithLogin } = await import("../../lib/apiSync");
+                  localStorage.setItem(API_URL_KEY, apiBase.replace(/\/$/, ""));
+                  localStorage.setItem(API_EMAIL_KEY, apiEmail.trim());
+                  const result = await syncPushWithLogin(apiEmail.trim(), apiPassword);
+                  setApiPassword("");
+                  if (result.conflicts.length) {
+                    push(
+                      "bad",
+                      `Synced with ${result.conflicts.length} conflict(s) — ${result.applied} row(s) applied. Check details before trusting the merge.`,
+                    );
+                  } else {
+                    push("good", `Synced — ${result.applied} row(s) applied.`);
+                  }
+                } catch (error: unknown) {
+                  push("bad", error instanceof Error ? error.message : "Sync failed.");
+                } finally {
+                  setPushBusy(false);
+                }
+              })();
+            }}
+          >
+            Sync push (M2)
+          </button>
         </div>
       </div>
 
