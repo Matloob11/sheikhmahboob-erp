@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode, type SVGProps } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  type SVGProps,
+} from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { CommandJump } from "./CommandJump";
 import { KeyboardHelp } from "./KeyboardHelp";
@@ -13,8 +22,12 @@ import { hasPracticePin, lockPractice } from "../domain/settings";
 import { useDeskIdleLock } from "../hooks/useDeskIdleLock";
 import { fiscalYearLabel } from "../lib/fiscalYear";
 import { periodLabel } from "../lib/ids";
+import { pushRecentClientId, readRecentClientIds } from "../lib/recentClients";
+import type { Client } from "../types";
 
 type NavItem = { to: string; label: string; end?: boolean };
+
+const SWITCHER_CAP = 20;
 
 const WORK: NavItem[] = [
   { to: "/today", label: "Today" },
@@ -158,8 +171,11 @@ export function AppShell() {
   const { client, clients, period, chooseClient, setPeriod, settings } = useDesk();
   const location = useLocation();
   const switcherRef = useRef<HTMLDivElement>(null);
+  const listId = useId();
   const [query, setQuery] = useState("");
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const [recentIds, setRecentIds] = useState(() => readRecentClientIds());
   const [moreOpen, setMoreOpen] = useState(false);
   const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const live = client?.environment === "production";
@@ -169,20 +185,44 @@ export function AppShell() {
   const masterItems = setupOnly ? MASTERS.filter((item) => item.to === "/clients") : MASTERS;
   useDeskIdleLock(canLock);
 
+  const pool = useMemo(
+    () => clients.filter((row) => !row.archived || row.id === client?.id),
+    [clients, client?.id],
+  );
+
+  const recentClients = useMemo(() => {
+    const byId = new Map(pool.map((row) => [row.id, row]));
+    return recentIds.map((id) => byId.get(id)).filter((row): row is Client => Boolean(row));
+  }, [pool, recentIds]);
+
   const listed = useMemo(() => {
-    const pool = clients.filter((row) => !row.archived || row.id === client?.id);
     const needle = query.trim().toLowerCase();
-    if (!needle) return pool;
-    return pool.filter((row) => {
-      const hay = `${row.businessName} ${row.pntn} ${row.ntn ?? ""} ${row.personName ?? ""} ${row.city}`.toLowerCase();
-      return hay.includes(needle);
-    });
-  }, [clients, query, client?.id]);
+    const filtered = needle
+      ? pool.filter((row) => {
+          const hay = `${row.businessName} ${row.pntn} ${row.ntn ?? ""} ${row.personName ?? ""} ${row.city}`.toLowerCase();
+          return hay.includes(needle);
+        })
+      : pool;
+    return filtered.slice(0, SWITCHER_CAP);
+  }, [pool, query]);
+
+  const flatOptions = useMemo(() => {
+    if (query.trim()) return listed;
+    const recentSet = new Set(recentClients.map((row) => row.id));
+    const rest = listed.filter((row) => !recentSet.has(row.id));
+    return [...recentClients, ...rest].slice(0, SWITCHER_CAP);
+  }, [query, listed, recentClients]);
+
+  const activeId = flatOptions[active] ? `${listId}-${active}` : undefined;
 
   useEffect(() => {
     setMoreOpen(false);
     setSwitcherOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    setActive(0);
+  }, [query, flatOptions.length, switcherOpen]);
 
   useEffect(() => {
     function onPointer(event: MouseEvent) {
@@ -216,8 +256,29 @@ export function AppShell() {
   }, []);
 
   async function selectClient(id: string) {
+    setRecentIds(pushRecentClientId(id));
     await chooseClient(id);
     setSwitcherOpen(false);
+    setQuery("");
+  }
+
+  function onSwitcherKey(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setSwitcherOpen(true);
+      setActive((value) => Math.min(value + 1, Math.max(flatOptions.length - 1, 0)));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActive((value) => Math.max(value - 1, 0));
+    } else if (event.key === "Enter") {
+      const row = flatOptions[active];
+      if (switcherOpen && row) {
+        event.preventDefault();
+        void selectClient(row.id);
+      }
+    } else if (event.key === "Escape") {
+      setSwitcherOpen(false);
+    }
   }
 
   return (
@@ -240,39 +301,74 @@ export function AppShell() {
             className="client-switcher-btn"
             aria-expanded={switcherOpen}
             aria-haspopup="listbox"
+            aria-controls={listId}
             onClick={() => setSwitcherOpen((open) => !open)}
           >
             <span>{client?.businessName ?? "Select a client"}</span>
             {client ? <small className="mono">{fileLabel(client)}</small> : null}
           </button>
           {switcherOpen ? (
-            <div className="client-menu" role="listbox" aria-label="Clients">
-              {clients.filter((row) => !row.archived || row.id === client?.id).length > 5 ? (
+            <div className="client-menu" role="presentation">
+              {pool.length > 5 ? (
                 <input
                   className="client-search"
                   type="search"
+                  role="combobox"
                   placeholder="Search clients"
                   aria-label="Search clients"
+                  aria-expanded={switcherOpen}
+                  aria-controls={listId}
+                  aria-autocomplete="list"
+                  aria-activedescendant={activeId}
                   value={query}
-                  onChange={(event) => setQuery(event.target.value)}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setSwitcherOpen(true);
+                  }}
+                  onKeyDown={onSwitcherKey}
+                  autoFocus
                 />
               ) : null}
-              {listed.map((row) => (
-                <button
-                  key={row.id}
-                  type="button"
-                  role="option"
-                  aria-selected={row.id === client?.id}
-                  className={row.id === client?.id ? "client-item on" : "client-item"}
-                  onClick={() => void selectClient(row.id)}
-                >
-                  {row.businessName}
-                  <span className="mono">{fileLabel(row)}</span>
-                </button>
-              ))}
-              {listed.length === 0 ? (
-                <p className="client-empty">{clients.length === 0 ? "No clients yet." : "No matching client."}</p>
-              ) : null}
+              <div id={listId} role="listbox" aria-label="Clients">
+                {!query.trim() && recentClients.length > 0 ? (
+                  <p className="client-section" id={`${listId}-recents`}>
+                    Recent
+                  </p>
+                ) : null}
+                {flatOptions.map((row, index) => {
+                  const isRecent =
+                    !query.trim() && recentClients.some((recent) => recent.id === row.id) && index < recentClients.length;
+                  return (
+                    <button
+                      key={row.id}
+                      type="button"
+                      id={`${listId}-${index}`}
+                      role="option"
+                      aria-selected={row.id === client?.id || index === active}
+                      className={
+                        row.id === client?.id || index === active
+                          ? isRecent
+                            ? "client-item on recent"
+                            : "client-item on"
+                          : isRecent
+                            ? "client-item recent"
+                            : "client-item"
+                      }
+                      onMouseEnter={() => setActive(index)}
+                      onClick={() => void selectClient(row.id)}
+                    >
+                      {row.businessName}
+                      <span className="mono">{fileLabel(row)}</span>
+                    </button>
+                  );
+                })}
+                {flatOptions.length === 0 ? (
+                  <p className="client-empty">{clients.length === 0 ? "No clients yet." : "No matching client."}</p>
+                ) : null}
+                {pool.length > SWITCHER_CAP && listed.length >= SWITCHER_CAP ? (
+                  <p className="client-empty">Showing first {SWITCHER_CAP}. Type to narrow.</p>
+                ) : null}
+              </div>
               <NavLink className="client-manage" to={sectionPath("/clients")} onClick={() => setSwitcherOpen(false)}>
                 Manage clients
               </NavLink>

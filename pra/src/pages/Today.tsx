@@ -20,6 +20,7 @@ import {
 import { db } from "../db";
 import { useLiveState } from "../hooks/useLive";
 import { dueDates, periodLabel } from "../lib/ids";
+import { returnStatusLabel } from "../lib/statusLabel";
 import type { Invoice, PsidRecord, ReturnPeriod } from "../types";
 
 const PAGE_SIZE = 50;
@@ -256,7 +257,7 @@ export function TodayPage() {
                   <td data-label="To send" className={row.toPost ? "num" : "num muted"}>{row.toPost}</td>
                   <td data-label="PSID unpaid" className={row.psidOpen ? "num" : "num muted"}>{row.psidOpen}</td>
                   <td data-label="Return">
-                    <Badge tone={row.returnStatus}>{row.returnStatus}</Badge>
+                    <Badge tone={row.returnStatus}>{returnStatusLabel(row.returnStatus)}</Badge>
                   </td>
                   <td className="today-go">
                     <button className="btn ghost" type="button" onClick={() => void open(row)}>

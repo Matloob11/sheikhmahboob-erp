@@ -5,7 +5,6 @@ import App from "./App";
 import { registerDaftarPwa } from "./lib/pwa";
 import { applyTheme } from "./lib/theme";
 import "./index.css";
-import "./smc-theme.css";
 
 applyTheme();
 registerDaftarPwa();

@@ -53,6 +53,8 @@ export interface WorkQueueInput {
   returns: ReadonlyArray<ReturnPeriod>;
   period: string;
   now?: Date;
+  /** When true, archived clients stay in the queue (Clients page). Default hides them. */
+  includeArchived?: boolean;
 }
 
 const STAGE_RANK: Record<WorkStage, number> = { fix: 0, post: 1, pay: 2, file: 3, setup: 4, done: 5 };
@@ -92,7 +94,7 @@ export function buildWorkQueue(input: WorkQueueInput): ClientWorkRow[] {
   }
 
   const rows = input.clients
-    .filter((client) => !client.archived)
+    .filter((client) => input.includeArchived || !client.archived)
     .map((client): ClientWorkRow => {
       const failed = failedBy.get(client.id) ?? 0;
       const unclear = unclearBy.get(client.id) ?? 0;

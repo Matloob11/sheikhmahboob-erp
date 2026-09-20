@@ -33,8 +33,16 @@ echo "=== lint pra (non-fatal) ==="
 echo "=== build pra (PRA_LIVE_BASE=1 → /pra/) ==="
 (
   cd "$LOCAL"
-  # Inline env so nested shells / Windows npm wrappers cannot drop the export.
-  env PRA_LIVE_BASE=1 npx --no-install vite build --outDir .live-dist --emptyOutDir
+  # Windows Git Bash often has no `node` on PATH; npm wrappers also drop env.
+  NODE_BIN="$(command -v node.exe 2>/dev/null || command -v node 2>/dev/null || true)"
+  if [[ -z "$NODE_BIN" && -x "/c/Program Files/nodejs/node.exe" ]]; then
+    NODE_BIN="/c/Program Files/nodejs/node.exe"
+  fi
+  if [[ -z "$NODE_BIN" ]]; then
+    echo "node not found for live build" >&2
+    exit 1
+  fi
+  "$NODE_BIN" -e "process.env.PRA_LIVE_BASE='1'; require('child_process').execSync('npx --no-install vite build --outDir .live-dist --emptyOutDir',{stdio:'inherit',env:process.env})"
 )
 
 if [[ ! -f "$OUT/index.html" ]]; then

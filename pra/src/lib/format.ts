@@ -47,6 +47,44 @@ export function formatDay(value = new Date()): string {
   return formatDateTime(value).slice(0, 10);
 }
 
+/** Friendly list stamp from a PRA `YYYY-MM-DD HH:MM:SS` (or Date/ms). */
+export function formatListDateTime(value: string | number | Date): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return "—";
+    const match = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(trimmed);
+    if (match) {
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      const day = Number(match[3]);
+      const hour = Number(match[4] ?? "0");
+      const minute = Number(match[5] ?? "0");
+      const when = new Date(year, month - 1, day, hour, minute);
+      if (!Number.isNaN(when.getTime())) {
+        return when.toLocaleString("en-PK", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+    }
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) value = parsed;
+    else return trimmed;
+  }
+  const when = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(when.getTime())) return "—";
+  return when.toLocaleString("en-PK", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function tabHue(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i += 1) {

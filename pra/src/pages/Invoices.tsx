@@ -28,8 +28,10 @@ import {
   type InvoiceListQuery,
 } from "../domain/invoiceList";
 import { sectionPath } from "../domain/nav";
+import { formatListDateTime } from "../lib/format";
 import { periodLabel } from "../lib/ids";
 import { pkr } from "../lib/money";
+import { invoiceStatusLabel } from "../lib/statusLabel";
 import type { Invoice, InvoiceStatus } from "../types";
 
 const STATUS_PILLS: ReadonlyArray<{ value: InvoiceStatus | "all"; label: string }> = [
@@ -519,7 +521,7 @@ export function InvoicesPage() {
                   {importPreview.map((row) => (
                     <tr key={row.usin}>
                       <td className="mono">{row.usin}</td>
-                      <td className="mono">{row.dateTime || "—"}</td>
+                      <td>{row.dateTime ? formatListDateTime(row.dateTime) : "—"}</td>
                       <td>{row.buyerName || "—"}</td>
                       <td>{row.lineCount}</td>
                       <td className={row.errors.length ? "tone-late" : "tone-ok"}>
@@ -576,11 +578,11 @@ function InvoiceRow({
         </Link>
       </td>
       <td>{invoice.buyerName || "—"}</td>
-      <td className="mono">{invoice.dateTime}</td>
+      <td>{formatListDateTime(invoice.dateTime)}</td>
       <td>{pkr(invoice.totalBillAmount)}</td>
       <td className="mono">{invoice.fiscalNumber || "—"}</td>
       <td>
-        <Badge tone={invoice.status}>{invoice.inFlight ? `${invoice.status} · sending` : invoice.status}</Badge>
+        <Badge tone={invoice.status}>{invoiceStatusLabel(invoice.status, invoice.inFlight)}</Badge>
       </td>
       <td>{result ? <span className={result.ok ? "tone-ok" : "tone-late"}>{result.message}</span> : "—"}</td>
     </tr>

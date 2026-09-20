@@ -13,6 +13,7 @@ import { sectionPath } from "../domain/nav";
 import { dailyPostedBills, periodCompare, previousPeriod } from "../domain/reports";
 import { formatLongDay, periodLabel } from "../lib/ids";
 import { pkr } from "../lib/money";
+import { environmentLabel, returnStatusLabel } from "../lib/statusLabel";
 import { FirstRun } from "./FirstRun";
 
 function daysCopy(days: number, noun: string): string {
@@ -104,8 +105,8 @@ export function DeskPage() {
         title={client.businessName}
         actions={
           <>
-            <Badge tone={filing?.status ?? "open"}>{filing?.status ?? "open"}</Badge>
-            <Badge tone={client.environment}>{client.environment}</Badge>
+            <Badge tone={filing?.status ?? "open"}>{returnStatusLabel(filing?.status ?? "open")}</Badge>
+            <Badge tone={client.environment}>{environmentLabel(client.environment)}</Badge>
             <Link className="btn ghost" to={sectionPath("/reports")}>
               Reports
             </Link>

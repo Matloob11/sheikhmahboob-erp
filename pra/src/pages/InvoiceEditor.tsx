@@ -1,21 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Badge } from "../components/Badge";
-import { BuyerPicker } from "../components/BuyerPicker";
 import { Confirm } from "../components/Confirm";
 import { EmptyState } from "../components/EmptyState";
-import { AmountInput, SelectField, TextInput } from "../components/Field";
+import { TextInput } from "../components/Field";
 import { InvoicePrint, printInvoice } from "../components/InvoicePrint";
 import { Skeleton } from "../components/Skeleton";
-import { ItemPicker, PctPicker } from "../components/ItemPicker";
 import { NeedClient } from "../components/NeedClient";
 import { PageHeader } from "../components/PageHeader";
-import { Panel } from "../components/Panel";
 import { useDesk } from "../context/DeskContext";
 import { useNotice } from "../context/NoticeContext";
 import { db, emptyInvoice } from "../db";
-import { applyBuyerToInvoice, buyerDraftFromInvoice, saveBuyer } from "../domain/buyers";
-import { applyItemToLine, applyPctToLine, resolveTaxDefaults } from "../domain/catalog";
+import { resolveTaxDefaults } from "../domain/catalog";
 import {
   cloneInvoiceDraft,
   composeInvoiceDateTime,
@@ -24,7 +20,6 @@ import {
   posChecks,
   splitInvoiceDateTime,
   type AdjustmentPick,
-  canRemoveInvoice,
   clearInvoiceInFlight,
   reconcileInvoiceNotPosted,
   reconcileInvoicePosted,
@@ -34,32 +29,29 @@ import {
   usinLocked,
   validateInvoiceDraft,
 } from "../domain/invoices";
-import {
-  INVOICE_STEPS,
-  nextInvoiceStep,
-  prevInvoiceStep,
-  type InvoiceStep,
-} from "../domain/deskChrome";
+import { INVOICE_STEPS, type InvoiceStep } from "../domain/deskChrome";
 import { sectionPath } from "../domain/nav";
 import { useUnsavedGuard } from "../hooks/useUnsavedGuard";
 import { useLive } from "../hooks/useLive";
 import { formatDateTime } from "../lib/format";
+import { focusFirstFieldError } from "../lib/fieldErrors";
 import { invoiceMailto, invoiceWhatsApp } from "../lib/shareInvoice";
 import { newId, nextUsin, periodStamp } from "../lib/ids";
 import { parseAmount, pkr } from "../lib/money";
 import { postedMessage, recalcLine, totalsForInvoice, totalsFromItems } from "../lib/pra";
+import { environmentLabel, invoiceStatusLabel } from "../lib/statusLabel";
 import {
   BUYER_TYPES,
-  INVOICE_TYPES,
-  PAYMENT_MODES,
   type Buyer,
   type CatalogItem,
   type Invoice,
   type InvoiceLine,
-  type InvoiceType,
-  type PaymentMode,
   type PctCode,
 } from "../types";
+import { InvoiceEditorHeader } from "./invoice/InvoiceEditorHeader";
+import { InvoiceEditorLines } from "./invoice/InvoiceEditorLines";
+import { InvoiceEditorPost } from "./invoice/InvoiceEditorPost";
+import { InvoiceEditorReview } from "./invoice/InvoiceEditorReview";
 
 type AdjustPickState = { on: boolean; quantity: string; saleValue: string };
 
@@ -186,7 +178,7 @@ export function InvoiceEditorPage() {
   }, [invoice, owner, locked, sending, isNew, navigate, push]);
 
   useEffect(() => {
-    function onKey(event: KeyboardEvent) {
+    function onKey(event: globalThis.KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
         if (!locked) void saveDraft();
@@ -221,7 +213,34 @@ export function InvoiceEditorPage() {
     setInvoice(hydrate(result.invoice));
     setErrors(result.errors);
     push(result.errors.length ? "bad" : "good", result.errors.length ? "Fix the items below." : "All checks passed. Ready to send.");
+    if (result.errors.length) {
+      const needsLines = result.errors.some((row) => /^Line \d+:/i.test(row) || row.includes("at least one line"));
+      if (needsLines) setStep("lines");
+      else setStep("header");
+      queueMicrotask(() => focusFirstFieldError(result.errors));
+    }
     if (isNew) navigate(sectionPath(`/invoices/${result.invoice.id}`), { replace: true });
+  }
+
+  function addLine() {
+    if (!invoice || locked) return;
+    const items = [...invoice.items, blankLine(invoice.items.length + 1, taxDefaults)];
+    patch({ items, ...totalsFromItems(items) });
+  }
+
+  function onLineKeyDown(event: KeyboardEvent<HTMLInputElement>, rowIndex: number, col: string) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      addLine();
+      return;
+    }
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    const nextRow = event.key === "ArrowUp" ? rowIndex - 1 : rowIndex + 1;
+    const target = document.querySelector<HTMLElement>(
+      `[data-line-row="${nextRow}"][data-line-col="${col}"]`,
+    );
+    target?.focus();
   }
 
   async function postNow() {
@@ -365,9 +384,9 @@ export function InvoiceEditorPage() {
         description="Posted invoices stay locked. Extra tax and ref USIN sit under More."
         actions={
           <>
-            <Badge tone={invoice.status}>{invoice.status}</Badge>
+            <Badge tone={invoice.status}>{invoiceStatusLabel(invoice.status, invoice.inFlight)}</Badge>
             <Badge tone={invoice.postedEnvironment ?? owner.environment}>
-              {invoice.postedEnvironment ?? owner.environment}
+              {environmentLabel(invoice.postedEnvironment ?? owner.environment)}
             </Badge>
             <Link className="btn ghost" to={sectionPath("/invoices")}>
               Back
@@ -447,7 +466,7 @@ export function InvoiceEditorPage() {
         </div>
       ) : null}
       {errors.length ? (
-        <div className="alert bad">
+        <div className="alert bad" data-invoice-errors tabIndex={-1}>
           {errors.map((error) => (
             <div key={error}>{error}</div>
           ))}
@@ -486,505 +505,96 @@ export function InvoiceEditorPage() {
         </nav>
 
         {step === "header" ? (
-        <div className="editor-span no-print" id="invoice-header">
-          <Panel title="1 · Header">
-            <div className="form-grid">
-              <TextInput
-                label="USIN"
-                className="mono"
-                disabled={locked || usinFrozen}
-                value={invoice.usin}
-                onChange={(event) => patch({ usin: event.target.value })}
-              />
-              <TextInput
-                label="Date"
-                type="date"
-                lang="en-GB"
-                disabled={locked}
-                value={stamp.date}
-                onChange={(event) => patch({ dateTime: composeInvoiceDateTime(event.target.value, stamp.time) })}
-              />
-              <TextInput
-                label="Time"
-                type="time"
-                step={1}
-                className="mono"
-                disabled={locked}
-                value={stamp.time.slice(0, 8)}
-                onChange={(event) => patch({ dateTime: composeInvoiceDateTime(stamp.date, event.target.value) })}
-                hint="Stored as YYYY-MM-DD HH:MM:SS"
-              />
-              <SelectField
-                label="Invoice type"
-                disabled={locked}
-                value={invoice.invoiceType}
-                onChange={(event) => patch({ invoiceType: Number(event.target.value) as InvoiceType })}
-              >
-                {INVOICE_TYPES.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </SelectField>
-              <SelectField
-                label="Payment mode"
-                disabled={locked}
-                value={invoice.paymentMode}
-                onChange={(event) => patch({ paymentMode: Number(event.target.value) as PaymentMode })}
-              >
-                {PAYMENT_MODES.map((mode) => (
-                  <option key={mode.value} value={mode.value}>
-                    {mode.label}
-                  </option>
-                ))}
-              </SelectField>
-              <div className="form-span">
-                <BuyerPicker
-                  buyers={buyers}
-                  disabled={locked}
-                  onPick={(buyer) => patch(applyBuyerToInvoice(buyer))}
-                />
-              </div>
-              <TextInput
-                label="Buyer name"
-                disabled={locked}
-                value={invoice.buyerName}
-                onChange={(event) => patch({ buyerName: event.target.value, buyerId: undefined })}
-              />
-              <TextInput
-                label="Buyer PNTN"
-                className="mono"
-                disabled={locked}
-                value={invoice.buyerPntn}
-                onChange={(event) => patch({ buyerPntn: event.target.value })}
-              />
-              <TextInput
-                label="Buyer CNIC"
-                className="mono"
-                disabled={locked}
-                value={invoice.buyerCnic}
-                onChange={(event) => patch({ buyerCnic: event.target.value })}
-              />
-              <TextInput
-                label="Buyer phone"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                disabled={locked}
-                value={invoice.buyerPhone}
-                onChange={(event) => patch({ buyerPhone: event.target.value })}
-              />
-              <TextInput
-                label="Buyer type"
-                disabled
-                value={buyerKindLabel}
-                hint={pickedBuyer?.buyerType ? "From the buyer master" : "Inferred from PNTN / CNIC"}
-                onChange={() => undefined}
-              />
-            </div>
-            <details className="more-fields" open={showAdvanced} onToggle={(event) => setShowAdvanced(event.currentTarget.open)}>
-              <summary>More header fields</summary>
-              <div className="form-grid" style={{ marginTop: 12 }}>
-              <TextInput
-                label="Sale type"
-                disabled={locked}
-                value={invoice.saleType ?? "Services"}
-                onChange={(event) => patch({ saleType: event.target.value })}
-              />
-              <TextInput
-                label="Taxpayer type"
-                disabled={locked}
-                value={invoice.taxpayerType ?? ""}
-                onChange={(event) => patch({ taxpayerType: event.target.value })}
-              />
-              <TextInput
-                label="Buyer district"
-                disabled={locked}
-                value={invoice.buyerDistrict ?? ""}
-                onChange={(event) => patch({ buyerDistrict: event.target.value })}
-              />
-              <AmountInput
-                label="Extra tax"
-                disabled={locked}
-                value={invoice.extraTax ?? 0}
-                onValueChange={(extraTax) => patch({ extraTax })}
-              />
-              <AmountInput
-                label="ST withheld"
-                disabled={locked}
-                value={invoice.stWithheld ?? 0}
-                onValueChange={(stWithheld) => patch({ stWithheld })}
-              />
-              <label className="row form-span">
-                <input
-                  type="checkbox"
-                  disabled={locked}
-                  checked={invoice.reverseCharge === true}
-                  onChange={(event) => patch({ reverseCharge: event.target.checked })}
-                />
-                Reverse charge
-              </label>
-              <TextInput
-                label="Header discount (sum of lines)"
-                disabled
-                value={String(invoice.discount)}
-                hint="Edit line discounts; this total follows them."
-                readOnly
-              />
-              <TextInput
-                label="Ref USIN (debit/credit)"
-                className="mono"
-                disabled={locked}
-                value={invoice.refUsin}
-                onChange={(event) => patch({ refUsin: event.target.value })}
-              />
-              </div>
-            </details>
-            <div className="row" style={{ marginTop: 12 }}>
-              <button
-                className="btn ghost"
-                type="button"
-                disabled={locked || !invoice.buyerName.trim()}
-                onClick={() => {
-                  void saveBuyer(owner.id, buyerDraftFromInvoice(invoice), invoice.buyerId).then((result) => {
-                    if (result.errors.length) {
-                      push("bad", result.errors[0] ?? "Could not save buyer.");
-                      return;
-                    }
-                    patch(applyBuyerToInvoice(result.buyer));
-                    push("good", `Saved buyer ${result.buyer.name}.`);
-                  });
-                }}
-              >
-                Save buyer to this file
-              </button>
-            </div>
-            <div className="row" style={{ marginTop: 12 }}>
-              <button className="btn stamp" type="button" onClick={() => setStep(nextInvoiceStep(step))}>
-                Continue to lines
-              </button>
-            </div>
-          </Panel>
-        </div>
+          <InvoiceEditorHeader
+            invoice={invoice}
+            owner={owner}
+            buyers={buyers}
+            errors={errors}
+            locked={locked}
+            usinFrozen={usinFrozen}
+            stamp={stamp}
+            pickedBuyer={pickedBuyer}
+            buyerKindLabel={buyerKindLabel}
+            showAdvanced={showAdvanced}
+            step={step}
+            onPatch={patch}
+            onComposeDateTime={(date, time) => patch({ dateTime: composeInvoiceDateTime(date, time) })}
+            onSetShowAdvanced={setShowAdvanced}
+            onSetStep={setStep}
+            onPush={push}
+          />
         ) : null}
 
         {step === "lines" ? (
-        <div className="editor-span no-print" id="invoice-lines">
-          <Panel
-            title="2 · Lines"
-            actions={
-              <button
-                className="btn ghost"
-                type="button"
-                disabled={locked}
-                onClick={() => {
-                  const items = [...invoice.items, blankLine(invoice.items.length + 1, taxDefaults)];
-                  patch({ items, ...totalsFromItems(items) });
-                }}
-              >
-                Add line
-              </button>
-            }
-          >
-            <div className="picker-row">
-              <ItemPicker
-                items={catalogItems}
-                disabled={locked}
-                onPick={(item) => {
-                  const next = applyItemToLine(blankLine(invoice.items.length + 1, taxDefaults), item);
-                  const items = [...invoice.items, recalcLine(next)];
-                  patch({ items, ...totalsFromItems(items) });
-                }}
-              />
-              <PctPicker
-                rates={pctRates}
-                disabled={locked}
-                onPick={(rate) => {
-                  const next = applyPctToLine(blankLine(invoice.items.length + 1, taxDefaults), rate);
-                  const items = [...invoice.items, recalcLine(next)];
-                  patch({ items, ...totalsFromItems(items) });
-                }}
-              />
-            </div>
-            <div className="table-wrap">
-              <table className="line-table">
-                <thead>
-                  <tr>
-                    <th>Code</th>
-                    <th>Name</th>
-                    <th>Qty</th>
-                    <th>PCT</th>
-                    <th>Rate %</th>
-                    <th>Sale value</th>
-                    <th>Discount</th>
-                    <th>Further tax</th>
-                    <th>Tax</th>
-                    <th>Total</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoice.items.map((line) => (
-                    <tr key={line.id}>
-                      <td data-label="Code">
-                        <input
-                          className="mono"
-                          disabled={locked}
-                          aria-label={`Item code ${line.itemCode || "line"}`}
-                          value={line.itemCode}
-                          onChange={(event) => patchLine(line.id, { itemCode: event.target.value })}
-                        />
-                      </td>
-                      <td data-label="Name">
-                        <input
-                          disabled={locked}
-                          aria-label={`Item name ${line.itemCode || "line"}`}
-                          value={line.itemName}
-                          onChange={(event) => patchLine(line.id, { itemName: event.target.value })}
-                        />
-                      </td>
-                      <td data-label="Qty">
-                        <AmountInput
-                          disabled={locked}
-                          aria-label={`Quantity ${line.itemCode || "line"}`}
-                          value={line.quantity}
-                          onValueChange={(quantity) => patchLine(line.id, { quantity })}
-                        />
-                      </td>
-                      <td data-label="PCT code">
-                        <input
-                          className="mono"
-                          disabled={locked}
-                          aria-label={`PCT code ${line.itemCode || "line"}`}
-                          value={line.pctCode}
-                          onChange={(event) => patchLine(line.id, { pctCode: event.target.value })}
-                        />
-                      </td>
-                      <td data-label="Rate %">
-                        <AmountInput
-                          disabled={locked}
-                          aria-label={`Tax rate ${line.itemCode || "line"}`}
-                          value={line.taxRate}
-                          onValueChange={(taxRate) => patchLine(line.id, { taxRate })}
-                        />
-                      </td>
-                      <td data-label="Sale value">
-                        <AmountInput
-                          disabled={locked}
-                          aria-label={`Sale value ${line.itemCode || "line"}`}
-                          value={line.saleValue}
-                          onValueChange={(saleValue) => patchLine(line.id, { saleValue })}
-                        />
-                      </td>
-                      <td data-label="Discount">
-                        <AmountInput
-                          disabled={locked}
-                          aria-label={`Line discount ${line.itemCode}`}
-                          value={line.discount}
-                          onValueChange={(discount) => patchLine(line.id, { discount })}
-                        />
-                      </td>
-                      <td data-label="Further tax">
-                        <AmountInput
-                          disabled={locked}
-                          aria-label={`Further tax ${line.itemCode || "line"}`}
-                          value={line.furtherTax}
-                          onValueChange={(furtherTax) => patchLine(line.id, { furtherTax })}
-                        />
-                      </td>
-                      <td className="mono" data-label="Tax">{pkr(line.taxCharged)}</td>
-                      <td className="mono" data-label="Total">{pkr(line.totalAmount)}</td>
-                      <td className="line-remove">
-                        <button
-                          className="btn ghost"
-                          type="button"
-                          disabled={locked}
-                          onClick={() => {
-                            const items = invoice.items.filter((item) => item.id !== line.id);
-                            patch({ items, ...totalsFromItems(items) });
-                          }}
-                        >
-                          Remove
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {invoice.items.length === 0 ? (
-                    <tr>
-                      <td colSpan={11} className="muted">
-                        Add a line or pick an item / PCT. New lines use the catalog rate ({rateHint}).
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-            <div className="row" style={{ marginTop: 12 }}>
-              <button className="btn ghost" type="button" onClick={() => setStep(prevInvoiceStep(step))}>
-                Back
-              </button>
-              <button className="btn stamp" type="button" onClick={() => setStep(nextInvoiceStep(step))}>
-                Continue to review
-              </button>
-            </div>
-          </Panel>
-        </div>
+          <InvoiceEditorLines
+            invoice={invoice}
+            errors={errors}
+            locked={locked}
+            step={step}
+            catalogItems={catalogItems}
+            pctRates={pctRates}
+            rateHint={rateHint}
+            blankLine={(index) => blankLine(index, taxDefaults)}
+            onPatch={patch}
+            onPatchLine={patchLine}
+            onAddLine={addLine}
+            onLineKeyDown={onLineKeyDown}
+            onSetStep={setStep}
+          />
         ) : null}
 
         {step === "review" || step === "post" ? (
-        <div className="no-print" id="invoice-review">
-          <Panel title="3 · Review">
-            <article className="metric">
-              <span>Sale value</span>
-              <b>{pkr(totals.totalSaleValue)}</b>
-            </article>
-            <article className="metric" style={{ marginTop: 12 }}>
-              <span>Tax charged</span>
-              <b>{pkr(totals.totalTaxCharged)}</b>
-            </article>
-            <article className="metric" style={{ marginTop: 12 }}>
-              <span>Further tax</span>
-              <b>{pkr(totals.furtherTax)}</b>
-            </article>
-            <article className="metric" style={{ marginTop: 12 }}>
-              <span>Bill amount</span>
-              <b>{pkr(totals.totalBillAmount)}</b>
-            </article>
-            <p className="muted" style={{ margin: "16px 0 0" }}>
-              Extra tax {pkr(invoice.extraTax ?? 0)} · ST withheld {pkr(invoice.stWithheld ?? 0)} · Reverse
-              charge {invoice.reverseCharge ? "yes" : "no"}
-              {invoice.saleType ? ` · ${invoice.saleType}` : ""}
-              {invoice.buyerDistrict ? ` · ${invoice.buyerDistrict}` : ""}
-            </p>
-            {invoice.fiscalNumber ? (
-              <>
-                <p className="mono" style={{ fontSize: "1.15rem", margin: "16px 0 8px" }}>
-                  {invoice.fiscalNumber}
-                </p>
-                <p className="muted" style={{ margin: 0 }}>
-                  {postedMessage(invoice.fiscalNumber, owner.environment)}
-                </p>
-              </>
-            ) : null}
-            <div className="row" style={{ marginTop: 16 }}>
-              <button className="btn ghost" type="button" onClick={() => setStep("lines")}>
-                Back to lines
-              </button>
-              <button className="btn stamp" type="button" onClick={() => setStep("post")}>
-                Continue to post
-              </button>
-            </div>
-          </Panel>
-        </div>
+          <InvoiceEditorReview invoice={invoice} owner={owner} totals={totals} onSetStep={setStep} />
         ) : null}
 
         {step === "review" || step === "post" ? (
-        <aside className="editor-aside">
-          <InvoicePrint invoice={invoice} client={owner} />
-          <div className="editor-actions no-print">
-            <button className="btn ghost" type="button" onClick={() => printInvoice("a4")}>
-              {locked ? "Print A4" : "Preview / print draft"}
-            </button>
-            <button className="btn ghost" type="button" onClick={() => printInvoice("thermal")}>
-              Print 80mm
-            </button>
-            <a className="btn ghost" href={invoiceMailto(invoice, owner)}>
-              Email summary
-            </a>
-            <a className="btn ghost" href={invoiceWhatsApp(invoice, owner, invoice.buyerPhone)} target="_blank" rel="noreferrer">
-              WhatsApp summary
-            </a>
-          </div>
-        </aside>
+          <aside className="editor-aside">
+            <InvoicePrint invoice={invoice} client={owner} />
+            <div className="editor-actions no-print">
+              <button className="btn ghost" type="button" onClick={() => printInvoice("a4")}>
+                {locked ? "Print A4" : "Preview / print draft"}
+              </button>
+              <button className="btn ghost" type="button" onClick={() => printInvoice("thermal")}>
+                Print 80mm
+              </button>
+              <a className="btn ghost" href={invoiceMailto(invoice, owner)}>
+                Email summary
+              </a>
+              <a className="btn ghost" href={invoiceWhatsApp(invoice, owner, invoice.buyerPhone)} target="_blank" rel="noreferrer">
+                WhatsApp summary
+              </a>
+            </div>
+          </aside>
         ) : null}
 
         {step === "post" ? (
-        <div className="editor-span no-print" id="invoice-post">
-          <Panel title="4 · Post">
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <p className="muted" style={{ margin: 0 }}>
-                PRA attempts: {invoice.attemptCount || 0}
-                {invoice.lastCode ? ` · code ${invoice.lastCode}` : ""}
-              </p>
-              {invoice.lastResponse ? (
-                <button className="btn ghost" type="button" onClick={() => setShowPayload((value) => !value)}>
-                  {showPayload ? "Hide PRA response" : "Show PRA response"}
-                </button>
-              ) : null}
-            </div>
-            {showPayload && invoice.lastResponse ? <pre className="payload mono">{invoice.lastResponse}</pre> : null}
-            <div className="editor-actions" style={{ marginTop: 16 }}>
-              <button className="btn ghost" type="button" disabled={locked || sending} onClick={() => void saveDraft()}>
-                Save draft
-              </button>
-              <button className="btn ghost" type="button" disabled={locked || sending} onClick={() => void validateOnly()}>
-                Validate locally
-              </button>
-              <button
-                className="btn stamp"
-                type="button"
-                disabled={sending || locked}
-                aria-busy={sending}
-                onClick={requestPost}
-              >
-                {sending ? <span className="editor-spin" aria-hidden="true" /> : null}
-                {sending ? "Posting…" : owner.environment === "production" ? "Post to production" : "Post to sandbox"}
-              </button>
-              {locked ? (
-                <>
-                  <button className="btn ghost" type="button" disabled={busy} onClick={() => startAdjust(3)}>
-                    Credit this invoice
-                  </button>
-                  <button className="btn ghost" type="button" disabled={busy} onClick={() => startAdjust(2)}>
-                    Debit this invoice
-                  </button>
-                </>
-              ) : null}
-              {invoice.inFlight && !busy ? (
-                <button
-                  className="btn ghost"
-                  type="button"
-                  onClick={() => {
-                    void clearInvoiceInFlight(invoice).then((next) => {
-                      setInvoice(hydrate(next));
-                      push("info", "Send lock cleared. Confirm this USIN is not already on PRA before retrying.");
-                    });
-                  }}
-                >
-                  Clear send lock
-                </button>
-              ) : null}
-              <button
-                className="btn ghost"
-                type="button"
-                onClick={() => {
-                  void cloneInvoiceDraft(owner, invoice).then((next) => {
-                    push("good", `Opened draft ${next.usin}.`);
-                    navigate(sectionPath(`/invoices/${next.id}`));
-                  });
-                }}
-              >
-                Clone as draft
-              </button>
-              <button
-                className="btn ghost"
-                type="button"
-                disabled={locked}
-                onClick={() => patch({ dateTime: formatDateTime(periodStamp(period)) })}
-              >
-                Use working month
-              </button>
-              <button
-                className="btn ghost"
-                type="button"
-                disabled={!canRemoveInvoice(invoice) || sending}
-                onClick={() => setConfirmRemove(true)}
-              >
-                Remove draft
-              </button>
-            </div>
-          </Panel>
-        </div>
+          <InvoiceEditorPost
+            invoice={invoice}
+            owner={owner}
+            locked={locked}
+            sending={sending}
+            busy={busy}
+            showPayload={showPayload}
+            onSetShowPayload={setShowPayload}
+            onSaveDraft={() => void saveDraft()}
+            onValidateOnly={() => void validateOnly()}
+            onRequestPost={requestPost}
+            onStartAdjust={startAdjust}
+            onClearInFlight={() => {
+              void clearInvoiceInFlight(invoice).then((next) => {
+                setInvoice(hydrate(next));
+                push("info", "Send lock cleared. Confirm this USIN is not already on PRA before retrying.");
+              });
+            }}
+            onCloneDraft={() => {
+              void cloneInvoiceDraft(owner, invoice).then((next) => {
+                push("good", `Opened draft ${next.usin}.`);
+                navigate(sectionPath(`/invoices/${next.id}`));
+              });
+            }}
+            onUseWorkingMonth={() => patch({ dateTime: formatDateTime(periodStamp(period)) })}
+            onConfirmRemove={() => setConfirmRemove(true)}
+          />
         ) : null}
       </div>
 
