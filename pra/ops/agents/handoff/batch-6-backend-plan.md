@@ -1,7 +1,22 @@
 # Backend plan for ~500 clients and staff (Batch 6 Phase 5 / Batch 7 Phase E)
 
-**Status:** plan only — no code in this phase.  
+**Status:** plan only — no application code in this phase.  
 **Constraint:** same VPS `187.53.143.235` (Ubuntu, nginx, ERPNext). Do **not** install on the Frappe bench or disturb MariaDB used by ERPNext.
+
+## Checklist vs `06-hardening.md` Phase 5
+
+| Required | Covered |
+|---|---|
+| Postgres + small API on this VPS (not on Frappe bench) | Yes — Option A |
+| Users, roles, client↔staff assignment, audit with actor | Yes |
+| POS tokens encrypted server-side; browser never holds them | Yes |
+| Server PostData + idempotency `(clientId, usin)` + queue + unknown/reconcile | Yes |
+| Schema `period`, `(client_id, period)`, `(client_id, status)` + server pagination/search | Yes |
+| Cross-client Today queue (drafts, failed, PSID, return, days to 15th/18th) | Yes |
+| Monthly workflow → period locked | Yes (matches Phase C rules) |
+| Nightly off-server backups | Yes |
+| Migration from IndexedDB / JSON backups | Yes |
+| Options + cost/effort + recommendation + Matloob decisions | Yes |
 
 ## Why the browser desk cannot scale
 
@@ -25,14 +40,14 @@ Browser desk ──HTTPS──► nginx
                  ├ /pra/        static SPA (unchanged host path)
                  ├ /pra-api/    Node API (new)
                  └ /pra-ims/    locked PostData proxy (already done)
-Node API ──► Postgres (local container or cluster on VPS, separate from ERP DB)
-Node API ──► PRA PostData via 127.0.0.1 loopback or internal call to same whitelist path
+Node API ──► Postgres (Docker or native on VPS, **separate** from ERP MariaDB)
+Node API ──► PRA PostData via loopback / same whitelist path (never from clerk laptops)
 ```
 
 - **Users / roles:** owner, manager, clerk, read-only. Session cookie or short JWT; login is practice staff, not PRA IRIS.
 - **Client ↔ staff:** assignment table; clerks only see assigned clients; Today queue respects assignment.
 - **Audit:** every write records `actorUserId`, `at`, `kind`, `entityId`. Browser `events` table maps into this.
-- **POS tokens:** encrypted at rest (server KMS or libsodium with key in env / file outside git). Browser never receives plaintext after first save; posts use server-side token.
+- **POS tokens:** encrypted at rest (key in env / file outside git). Browser never receives plaintext after first save; posts use server-side token.
 - **Posting:** server job keyed on `(clientId, usin)` idempotency. Queue + `in_flight` / `unknown` / reconcile from Phase 2. Never double-post without reconcile.
 - **Schema indexes:** `period`, `(client_id, period)`, `(client_id, status)`, `(client_id, usin)` unique.
 - **Pagination / search:** server-side for invoices, buyers, Today.
@@ -66,4 +81,4 @@ Node API ──► PRA PostData via 127.0.0.1 loopback or internal call to same 
 
 ## Proof of this phase
 
-This file exists at `pra/ops/agents/handoff/batch-6-backend-plan.md`. No production code changes required for Phase E.
+This file is the deliverable. No production code or deploy for Phase E.
