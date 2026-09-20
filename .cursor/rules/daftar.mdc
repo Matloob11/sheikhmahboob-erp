@@ -1,0 +1,38 @@
+---
+description: Conventions for the Daftar PRA desk (pra/).
+globs: pra/**
+alwaysApply: false
+---
+
+# Daftar (`pra/`)
+
+Stack: React 19, TypeScript 6 strict (no `any`), Dexie 4 on IndexedDB, react-router 7, Vite 8,
+Vitest 5, oxlint. No backend: data lives in the browser. The only server piece is the nginx
+proxy `/pra-ims/` to `ims.pral.com.pk`.
+
+## Layout
+
+- `src/domain/*` pure logic with a `*.test.ts` beside it. Put rules here, not in components.
+- `src/lib/*` helpers: `pra.ts` (payload, posting), `money.ts`, `ids.ts`, `backup.ts`, `excel.ts`.
+- `src/pages/*` screens, `src/components/*` shared UI, `src/context/DeskContext.tsx` selected
+  client + period, `src/db.ts` Dexie schema.
+- Active briefs and handoffs: `pra/ops/agents/` and `pra/ops/agents/handoff/`. Read the latest
+  `*-done.md` files before starting so you do not redo or undo finished work.
+
+## Rules that have bitten before
+
+- Amount inputs use `AmountInput` from `components/Field.tsx` (raw string, parse on blur,
+  `inputMode="decimal"`). Never `value={String(n)}` with parse-on-keystroke.
+- New rows: `newId()` (full UUID) and `db.table.add`. `put` only for updates.
+- Success is PRA Code `100` or `00` only. A timeout or 5xx is status `unknown`, never `failed`,
+  and is never re-sent automatically. Production is never auto-posted.
+- Posted and `unknown` invoices are frozen: show stored totals, never recalculate them.
+- Only production posts count in ledger, reports, Annex C and print (`postedEnvironment`).
+- Credit notes (type 3) are negative in every total.
+- Tax is charged on `saleValue - discount`; header Discount equals the sum of line discounts.
+- Every record carries `clientId`. Cross-client screens load only what is still open, grouped in
+  one pass (see `domain/today.ts`), never `toArray()` on the whole invoices table.
+- A Dexie schema change needs a new `version()` with `upgrade()`, and v4/v5 backups must import.
+- UI text is for a clerk: no "PostData", "payload", "in-flight", "USIN lock", README references.
+- Navigation inside the app goes through `sectionPath()`; the live base path is `/pra/`.
+- Styles: tokens from `:root` in `index.css`; no new hard-coded colours.

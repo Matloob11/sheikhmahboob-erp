@@ -1,0 +1,16 @@
+---
+description: Conventions for the Frappe/ERPNext custom app apps/di.
+globs: apps/di/**
+alwaysApply: false
+---
+
+# `apps/di` (Frappe v16, ERPNext v16, Python 3.14)
+
+- Edit locally, deploy with `./ops/push-app.sh di`, prove `https://sheikhmahboob.com/` answers.
+- `apps/frappe` and `apps/erpnext` are local-only clones with no remote. Do not edit them, do not
+  `bench get-app` over them.
+- DocType changes go through the JSON + a patch in `di/patches.txt`; never hand-edit the live DB.
+- `encryption_key` in `site_config.json` decrypts every stored token. Never print, move or
+  regenerate it.
+- "Safe to retry" applies only to failures that provably never reached FBR (see `di/integrations`).
+- Tests: `bench --site sheikhmahboob.com run-tests --app di` on the server only when asked.

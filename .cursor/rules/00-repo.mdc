@@ -1,0 +1,47 @@
+---
+description: Repo map, safety rules and how to talk to the owner. Applies to every task.
+alwaysApply: true
+---
+
+# sheikhmahboob-erp
+
+Two separate products live here. Never mix them.
+
+| Path | What | Deploy |
+|---|---|---|
+| `apps/di` | Frappe/ERPNext custom app for FBR digital invoicing on `sheikhmahboob.com` | `./ops/push-app.sh di` |
+| `pra/` | Daftar: browser-only React + Dexie desk for Punjab Revenue Authority (PRA) invoices | `./ops/push-pra.sh` |
+
+Read `AGENTS.md`, and for Daftar also `pra/AGENTS.md` and `pra/README.md`, before editing.
+
+## Owner
+
+Matloob runs a tax practice and is not a specialist in this code. Reports: outcome first, simple
+words, short. He often writes Roman Urdu; answer in the language he used. Say plainly what was
+not tested.
+
+## Always
+
+- Verify a reported bug in the code before fixing it. If the report is wrong, say so.
+- Money, tax, posting and data-integrity changes are test-first: failing test, then the fix.
+- Before saying "done": run the checks for the area you touched and quote the numbers.
+  Daftar: in `pra/` run `npm test`, `npx tsc -b`, `npm run lint`.
+- Keep changes narrow. Match the surrounding style. No drive-by refactors.
+- Work on a branch. Commit only when asked or when the active brief says so. Never `git push`,
+  never `--no-verify`, never force.
+- Use Context7 for library docs (React 19, Dexie 4, Vite 8, Vitest 5, react-router 7, Frappe)
+  instead of guessing an API. Use Playwright to look at a screen before calling UI work finished.
+
+## Never
+
+- Post to PRA or FBR **production** from a test, a script or a manual check.
+- Log into, scrape or automate PRA IRIS / `reg.pra.punjab.gov.pk`; invent PSIDs; call an
+  undocumented API.
+- Print, log, commit or paste tokens, passwords, PINs, SSH keys, `site_config.json`, or anything
+  under `server-snapshot/`.
+- Touch the live server (`root@187.53.143.235`) — SSH, nginx, bench, database, DNS, firewall —
+  unless the owner asked for that exact action in this conversation or the active brief grants it.
+  Any nginx edit: back up, `nginx -t`, reload, prove `/login` and `/pra/` still return 200,
+  roll back on failure.
+- `bench update --reset`, dropping or renaming the site, editing nginx files other than
+  `sheikhmahboob.conf`.
