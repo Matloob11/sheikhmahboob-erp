@@ -412,6 +412,39 @@ describe("totals and USIN", () => {
     expect(withTotals({ ...readyInvoice(), usin: "  DFT-1  " }, "cli_1").usin).toBe("DFT-1");
   });
 
+  it("does not rewrite tax on posted or unknown invoices when withTotals runs", () => {
+    const posted = readyInvoice({
+      status: "posted",
+      discount: 1000,
+      totalSaleValue: 10000,
+      totalTaxCharged: 1600,
+      totalBillAmount: 10600,
+      items: [
+        {
+          id: "ln_1",
+          itemCode: "IT_001",
+          itemName: "Fee",
+          quantity: 1,
+          pctCode: "00000000",
+          taxRate: 16,
+          saleValue: 10000,
+          discount: 1000,
+          furtherTax: 0,
+          taxCharged: 1600,
+          totalAmount: 10600,
+        },
+      ],
+    });
+    const next = withTotals(posted, "cli_1");
+    expect(next.totalTaxCharged).toBe(1600);
+    expect(next.items[0]?.taxCharged).toBe(1600);
+    expect(next.totalBillAmount).toBe(10600);
+
+    const unclear = withTotals({ ...posted, status: "unknown", fiscalNumber: "" }, "cli_1");
+    expect(unclear.totalTaxCharged).toBe(1600);
+    expect(unclear.items[0]?.taxCharged).toBe(1600);
+  });
+
   it("finds another invoice with the same client+USIN", async () => {
     const first = readyInvoice({ id: "inv_a", usin: "DFT-DUP" });
     const second = readyInvoice({ id: "inv_b", usin: "DFT-DUP" });

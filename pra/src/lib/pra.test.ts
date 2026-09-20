@@ -13,6 +13,7 @@ import {
   postedMessage,
   recalcLine,
   shouldFallbackFromProxy,
+  totalsForInvoice,
   validateInvoice,
 } from "./pra";
 
@@ -99,6 +100,37 @@ describe("line discount tax base", () => {
     });
     expect(line.taxCharged).toBe(1440);
     expect(line.totalAmount).toBe(10440);
+  });
+
+  it("keeps stored tax on posted invoices that used the old discount rules", () => {
+    // Historical: discount was sent but tax was sale × rate (discount ignored).
+    const posted = sampleInvoice({
+      status: "posted",
+      discount: 1000,
+      totalSaleValue: 10000,
+      totalTaxCharged: 1600,
+      totalBillAmount: 10600,
+      items: [
+        {
+          id: "ln_1",
+          itemCode: "IT_001",
+          itemName: "Fee",
+          quantity: 1,
+          pctCode: "00000000",
+          taxRate: 16,
+          saleValue: 10000,
+          discount: 1000,
+          furtherTax: 0,
+          taxCharged: 1600,
+          totalAmount: 10600,
+        },
+      ],
+    });
+    expect(recalcLine(posted.items[0]!).taxCharged).toBe(1440);
+    const totals = totalsForInvoice(posted);
+    expect(totals.totalTaxCharged).toBe(1600);
+    expect(totals.discount).toBe(1000);
+    expect(totals.totalBillAmount).toBe(10600);
   });
 
   it("sets header Discount to the sum of line discounts in the payload", () => {

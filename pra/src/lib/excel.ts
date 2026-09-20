@@ -4,7 +4,6 @@ import type { Client, Invoice, InvoiceType, PsidRecord, Purchase } from "../type
 import { INVOICE_TYPES, PAYMENT_MODES } from "../types";
 import { periodLabel } from "./ids";
 import { money } from "./money";
-import { recalcLine } from "./pra";
 
 async function createWorkbook(): Promise<Workbook> {
   const mod = await import("exceljs");
@@ -82,14 +81,14 @@ export function annexCRows(invoice: Invoice): AnnexCLineRow[] {
     ];
   }
   return invoice.items.map((line) => {
-    const calc = recalcLine(line);
+    // Posted / unknown rows must keep the tax PRA already accepted (or that was last stored).
     return {
       ...shared,
-      pctCode: calc.pctCode,
-      taxRate: calc.taxRate,
-      saleValue: money(calc.saleValue * sign),
-      taxCharged: money(calc.taxCharged * sign),
-      furtherTax: money(calc.furtherTax * sign),
+      pctCode: line.pctCode,
+      taxRate: line.taxRate,
+      saleValue: money(line.saleValue * sign),
+      taxCharged: money(line.taxCharged * sign),
+      furtherTax: money(line.furtherTax * sign),
     };
   });
 }

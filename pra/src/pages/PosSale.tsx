@@ -19,7 +19,7 @@ import { sectionPath } from "../domain/nav";
 import { useLive } from "../hooks/useLive";
 import { newId, nextUsin, periodStamp } from "../lib/ids";
 import { pkr } from "../lib/money";
-import { postedMessage, recalcLine, totalsFromItems } from "../lib/pra";
+import { postedMessage, recalcLine, totalsForInvoice } from "../lib/pra";
 import type { Buyer, CatalogItem, Invoice, InvoiceLine, PctCode } from "../types";
 
 function blankLine(defaults: { pctCode: string; taxRate: number }): InvoiceLine {
@@ -64,7 +64,7 @@ export function PosSalePage() {
   const taxDefaults = useMemo(() => resolveTaxDefaults(pctRates, activeItems), [pctRates, activeItems]);
   const checks = selected ? posChecks(selected) : [];
   const line = invoice?.items[0];
-  const totals = invoice ? totalsFromItems(invoice.items) : null;
+  const totals = invoice ? totalsForInvoice(invoice) : null;
   const locked = invoice?.status === "posted";
   const sending = Boolean(busy || invoice?.inFlight);
   const pickedBuyer = buyers.find((row) => row.id === invoice?.buyerId);

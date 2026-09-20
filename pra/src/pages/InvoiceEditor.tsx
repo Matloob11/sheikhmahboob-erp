@@ -47,7 +47,7 @@ import { formatDateTime } from "../lib/format";
 import { invoiceMailto, invoiceWhatsApp } from "../lib/shareInvoice";
 import { newId, nextUsin, periodStamp } from "../lib/ids";
 import { parseAmount, pkr } from "../lib/money";
-import { postedMessage, recalcLine, totalsFromItems } from "../lib/pra";
+import { postedMessage, recalcLine, totalsForInvoice, totalsFromItems } from "../lib/pra";
 import {
   BUYER_TYPES,
   INVOICE_TYPES,
@@ -197,7 +197,7 @@ export function InvoiceEditorPage() {
   }, [locked, saveDraft]);
 
   const totals = useMemo(
-    () => (invoice ? totalsFromItems(invoice.items) : null),
+    () => (invoice ? totalsForInvoice(invoice) : null),
     [invoice],
   );
 

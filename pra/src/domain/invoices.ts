@@ -35,6 +35,18 @@ export async function findDuplicateUsin(
 }
 
 export function withTotals(invoice: Invoice, clientId: string): Invoice {
+  if (invoice.status === "posted" || invoice.status === "unknown") {
+    return {
+      ...invoice,
+      clientId,
+      usin: invoice.usin.trim(),
+      refUsin: invoice.refUsin.trim(),
+      attemptCount: invoice.attemptCount ?? 0,
+      lastCode: invoice.lastCode ?? "",
+      inFlight: invoice.inFlight === true,
+      updatedAt: Date.now(),
+    };
+  }
   const totals = totalsFromItems(invoice.items);
   return {
     ...invoice,

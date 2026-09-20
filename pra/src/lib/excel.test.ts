@@ -150,6 +150,33 @@ describe("annexCRows", () => {
     expect(rows[1]?.saleValue).toBe(2000);
     expect(rows[1]?.furtherTax).toBe(20);
   });
+
+  it("keeps stored tax on posted lines even when recalcLine would change them", () => {
+    const historical = invoice();
+    historical.items = [
+      {
+        id: "ln_old",
+        itemCode: "IT_001",
+        itemName: "Old fee",
+        quantity: 1,
+        pctCode: "98151000",
+        taxRate: 16,
+        saleValue: 10000,
+        discount: 1000,
+        furtherTax: 0,
+        taxCharged: 1600,
+        totalAmount: 10600,
+      },
+    ];
+    historical.discount = 1000;
+    historical.totalSaleValue = 10000;
+    historical.totalTaxCharged = 1600;
+    historical.totalBillAmount = 10600;
+    expect(recalcLine(historical.items[0]!).taxCharged).toBe(1440);
+    const rows = annexCRows(historical);
+    expect(rows[0]?.taxCharged).toBe(1600);
+    expect(rows[0]?.saleValue).toBe(10000);
+  });
 });
 
 describe("annexCExportRows", () => {

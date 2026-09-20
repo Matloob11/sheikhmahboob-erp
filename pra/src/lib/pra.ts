@@ -86,6 +86,10 @@ export function lineDiscountTotal(items: ReadonlyArray<InvoiceLine>): number {
   return money(items.reduce((sum, line) => sum + money(line.discount), 0));
 }
 
+export function invoiceTotalsAreFrozen(status: Invoice["status"]): boolean {
+  return status === "posted" || status === "unknown";
+}
+
 export function recalcLine(line: InvoiceLine): InvoiceLine {
   const saleValue = money(line.saleValue);
   const discount = money(Math.min(Math.max(0, line.discount), Math.max(0, saleValue)));
@@ -123,6 +127,36 @@ export function totalsFromItems(
     discount,
     totalBillAmount: money(totalSaleValue + totalTaxCharged + furtherTax - discount),
   };
+}
+
+/** Posted / unknown invoices keep the numbers PRA already saw. Drafts recalculate. */
+export function totalsForInvoice(
+  invoice: Pick<
+    Invoice,
+    | "status"
+    | "items"
+    | "totalQuantity"
+    | "totalSaleValue"
+    | "totalTaxCharged"
+    | "furtherTax"
+    | "totalBillAmount"
+    | "discount"
+  >,
+): Pick<
+  Invoice,
+  "totalQuantity" | "totalSaleValue" | "totalTaxCharged" | "furtherTax" | "totalBillAmount" | "discount"
+> {
+  if (invoiceTotalsAreFrozen(invoice.status)) {
+    return {
+      totalQuantity: invoice.totalQuantity,
+      totalSaleValue: invoice.totalSaleValue,
+      totalTaxCharged: invoice.totalTaxCharged,
+      furtherTax: invoice.furtherTax,
+      totalBillAmount: invoice.totalBillAmount,
+      discount: invoice.discount,
+    };
+  }
+  return totalsFromItems(invoice.items);
 }
 
 export function isRealFiscalNumber(value: string): boolean {
