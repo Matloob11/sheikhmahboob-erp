@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Replace local apps + bench metadata with a clone from Hostinger.
-# Default source = domain instance B (frappe-bench-b / sheikhmahboob.com).
-# Old client A: BENCH=/home/frappe/frappe-bench ./ops/pull-apps.sh
+# Source = live VPS bench (/home/frappe/frappe-bench / sheikhmahboob.com).
 set -euo pipefail
 # shellcheck disable=SC1091
 source "$(cd "$(dirname "$0")" && pwd)/_common.sh"

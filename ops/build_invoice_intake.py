@@ -23,7 +23,7 @@ THIN = Side(style="thin", color="BBBBBB")
 BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
 # FBR's ten scenarios for this account, in the order the portal lists them.
-ACCOUNT_SCENARIOS = ["SN001", "SN002", "SN005", "SN006", "SN007", "SN016", "SN017", "SN018", "SN019", "SN024"]
+ACCOUNT_SCENARIOS = [f"SN{i:03d}" for i in range(1, 29)]
 SCENARIO_BY_ID = {s["name"]: s for s in REF["scenarios"]}
 
 wb = Workbook()

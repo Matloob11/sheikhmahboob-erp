@@ -17,3 +17,15 @@ server-snapshot/
 
 # Playwright MCP snapshots can contain typed credentials
 .playwright-mcp/
+.playwright-cli/
+
+# Local temp pulls / scratch (e.g. .tmp-live-di)
+.tmp-*/
+
+# Full framework trees (huge); only apps/di is the curated custom app
+apps/frappe/
+apps/erpnext/
+
+# Bench runtime noise if present locally
+config/pids/
+config/scheduler_process

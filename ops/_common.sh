@@ -1,35 +1,18 @@
 #!/usr/bin/env bash
 # Shared paths for ops scripts (sourced, not executed).
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HOST="root@187.127.123.235"
+HOST="root@187.53.143.235"
 
-# Default = domain instance B (https://sheikhmahboob.com).
-# Old client (http://187.127.123.235:8001):
-#   BENCH=/home/frappe/frappe-bench SITE=187.127.123.235 ./ops/push-app.sh di
-BENCH_A="/home/frappe/frappe-bench"
-SITE_A="187.127.123.235"
-BENCH_B="/home/frappe/frappe-bench-b"
-SITE_B="sheikhmahboob.com"
-BENCH="${BENCH:-$BENCH_B}"
-SITE="${SITE:-$SITE_B}"
-
-# Public URL used by the "prove it worked" curl. Derived from SITE so that
-# deploying to A does not report on B's health, which is what happened while
-# this URL was hard-coded in push-app.sh.
-URL_A="http://187.127.123.235:8001"
-URL_B="https://sheikhmahboob.com"
-if [[ "$SITE" == "$SITE_A" ]]; then
-  URL="${URL:-$URL_A}"
-else
-  URL="${URL:-$URL_B}"
-fi
+# Live box after 2026-09-19 cutover (srv1992968). Historical split docs stay in ops/*.md.
+BENCH="/home/frappe/frappe-bench"
+SITE="sheikhmahboob.com"
 
 resolve_key() {
   local candidates=(
-    "/mnt/c/Users/Matloob/.ssh/hostinger_codex"
-    "/c/Users/Matloob/.ssh/hostinger_codex"
-    "C:/Users/Matloob/.ssh/hostinger_codex"
-    "${HOME}/.ssh/hostinger_codex"
+    "/mnt/c/Users/Matloob/.ssh/hostinger_srv1992968"
+    "/c/Users/Matloob/.ssh/hostinger_srv1992968"
+    "C:/Users/Matloob/.ssh/hostinger_srv1992968"
+    "${HOME}/.ssh/hostinger_srv1992968"
   )
   local k
   for k in "${candidates[@]}"; do
@@ -38,7 +21,7 @@ resolve_key() {
       return 0
     fi
   done
-  echo "SSH key hostinger_codex not found" >&2
+  echo "SSH key hostinger_srv1992968 not found" >&2
   return 1
 }
 
