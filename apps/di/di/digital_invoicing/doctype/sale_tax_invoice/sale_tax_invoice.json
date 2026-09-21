@@ -12,6 +12,7 @@
   "invoice_date",
   "scenario_id",
   "fbr_environment",
+  "sandbox_run_status",
   "column_break_invoice",
   "fbr_invoice_no",
   "qr_code",
@@ -84,6 +85,14 @@
    "options": "Sandbox\nProduction",
    "print_hide": 1,
    "reqd": 1
+  },
+  {
+   "fieldname": "sandbox_run_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Sandbox Run",
+   "options": "\nPending Review\nFBR Validated\nAlready Successful",
+   "print_hide": 1
   },
   {
    "fieldname": "column_break_invoice",
@@ -241,7 +250,7 @@
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-08-12 15:00:00.000000",
+ "modified": "2026-08-21 21:30:00.000000",
  "modified_by": "Administrator",
  "module": "Digital Invoicing",
  "name": "Sale Tax Invoice",
@@ -259,6 +268,16 @@
    "report": 1,
    "role": "System Manager",
    "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "DI Panel User",
    "submit": 1,
    "write": 1
   },

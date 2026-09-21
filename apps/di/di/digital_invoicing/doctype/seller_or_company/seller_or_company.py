@@ -26,4 +26,12 @@ class SellerOrCompany(Document):
 		]
 	# end: auto-generated types
 
-	pass
+	def validate(self):
+		from di.panel import enforce_single_client_seller_cap
+
+		enforce_single_client_seller_cap(self)
+
+	def after_insert(self):
+		from di.panel import grant_creator_seller_permission
+
+		grant_creator_seller_permission(self)

@@ -1,0 +1,97 @@
+<style>
+	.letter-head,
+	.print-heading {
+		display: none !important;
+	}
+
+	.print-format {
+		padding: 0.6in 0.7in !important;
+	}
+
+	.cp-welcome {
+		box-sizing: border-box;
+		color: #1a1a1a;
+		font-family: Arial, Helvetica, sans-serif;
+		font-size: 13px;
+		line-height: 1.45;
+		margin: 0 auto;
+		max-width: 720px;
+	}
+
+	.cp-welcome h1 {
+		color: #868A4A;
+		font-size: 22px;
+		margin: 0 0 8px;
+	}
+
+	.cp-welcome .sub {
+		color: #555;
+		margin-bottom: 24px;
+	}
+
+	.cp-welcome table.creds {
+		border-collapse: collapse;
+		width: 100%;
+	}
+
+	.cp-welcome table.creds th,
+	.cp-welcome table.creds td {
+		border: 1px solid #cccccc;
+		padding: 10px 12px;
+		text-align: left;
+		vertical-align: top;
+	}
+
+	.cp-welcome table.creds th {
+		background: #868A4A;
+		color: #ffffff;
+		width: 34%;
+	}
+
+	.cp-welcome .note {
+		color: #444;
+		font-size: 12px;
+		margin-top: 22px;
+	}
+</style>
+
+<div class="cp-welcome">
+	<h1>Digital Invoicing — Client Panel</h1>
+	<p class="sub">Keep this page. It has the login for {{ doc.full_name }}.</p>
+
+	<table class="creds">
+		<tr>
+			<th>Login URL</th>
+			<td>{{ doc.login_url or "" }}</td>
+		</tr>
+		<tr>
+			<th>Email / Login</th>
+			<td>{{ doc.email or "" }}</td>
+		</tr>
+		<tr>
+			<th>Password</th>
+			<td>{{ doc.get_welcome_password() }}</td>
+		</tr>
+		<tr>
+			<th>Mode</th>
+			<td>{{ doc.mode or "" }}</td>
+		</tr>
+		<tr>
+			<th>Assigned clients</th>
+			<td>
+				{% set sellers = doc.assigned_seller_names() %}
+				{% if sellers %}
+					{{ sellers | join(", ") }}
+				{% else %}
+					None assigned — add your own Seller / Company after login.
+				{% endif %}
+			</td>
+		</tr>
+	</table>
+
+	<p class="note">
+		Open the login URL, enter the email and password, then change the password after first login.
+		You will only see invoices, buyers and items for the assigned Seller / Company records.
+		HS codes, UOMs and FBR masters are shared.
+	</p>
+</div>

@@ -44,9 +44,13 @@ def explain_error(error_code, error_message=""):
 
 	parts = [p for p in (error_message, row.get("message"), row.get("description")) if p]
 	seen = []
+	seen_keys = set()
 	for part in parts:
-		if part not in seen:
-			seen.append(part)
+		key = " ".join(str(part).split()).lower()
+		if key in seen_keys:
+			continue
+		seen_keys.add(key)
+		seen.append(part)
 	return "\n".join(seen)
 
 

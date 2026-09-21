@@ -1,4 +1,8 @@
 frappe.ui.form.on("Sale Tax Invoice", {
+	onload(frm) {
+		apply_invoice_picker_defaults(frm);
+	},
+
 	refresh(frm) {
 		render_qr_code(frm);
 		calculate_invoice_totals(frm);
@@ -21,12 +25,34 @@ frappe.ui.form.on("Sale Tax Invoice Item", {
 	quantity: calculate_invoice_item,
 	sale_rate: calculate_invoice_item,
 	tax_rate_value: calculate_invoice_item,
+	rate_in_percentage: calculate_invoice_item,
 	sales_tax_withheld_at_source: calculate_invoice_item,
 	extra_tax: calculate_invoice_item,
 	further_tax: calculate_invoice_item,
 	fed_payable: calculate_invoice_item,
-	discount: calculate_invoice_item
+	discount: calculate_invoice_item,
+	sro_schedule_no(frm, cdt, cdn) {
+		load_sro_serials_for_row(frm, cdt, cdn);
+	}
 });
+
+function apply_invoice_picker_defaults(frm) {
+	if (!frm.is_new()) {
+		return;
+	}
+	let selection = {};
+	try {
+		selection = JSON.parse(sessionStorage.getItem("di.sale_tax_invoice.selection") || "{}") || {};
+	} catch (error) {
+		selection = {};
+	}
+	if (selection.company && !frm.doc.seller__business_name) {
+		frm.set_value("seller__business_name", selection.company);
+	}
+	if (selection.environment && !frm.doc.fbr_environment) {
+		frm.set_value("fbr_environment", selection.environment);
+	}
+}
 
 function render_qr_code(frm) {
 	let qr_data = frm.doc.qr_code_data;
@@ -48,12 +74,17 @@ function calculate_invoice_item(frm, cdt, cdn) {
 	let tax_rate = flt(row.tax_rate_value);
 	let fixed_price = flt(row.fixed_notified_value_or_retail_price);
 
+	if (saleTypeNeedsRetailPrice(row.sale_type) && !fixed_price && sale_rate) {
+		fixed_price = sale_rate;
+		frappe.model.set_value(cdt, cdn, "fixed_notified_value_or_retail_price", fixed_price);
+	}
+
 	let value_sales = Math.max(quantity * sale_rate - discount, 0);
 	let tax_base = value_sales;
-	if (row.sale_type === "3rd Schedule Goods" && fixed_price) {
+	if (saleTypeNeedsRetailPrice(row.sale_type) && fixed_price) {
 		tax_base = quantity ? fixed_price * quantity : fixed_price;
 	}
-	let sales_tax = tax_base * tax_rate / 100;
+	let sales_tax = tax_base * tax_rate / 100 + extraRupeesPerQty(row.rate_in_percentage) * quantity;
 	let total_values =
 		value_sales +
 		sales_tax +
@@ -127,16 +158,74 @@ function describe_fbr_errors(vr) {
 	return lines.join("<br><br>");
 }
 
-// FBR rejects a non-18% line without an SRO schedule (0077) and rejects a serial
-// it does not recognise (0078). Rather than expecting the user to memorise
-// strings like "EIGHTH SCHEDULE Table 1" and serial "70", ask FBR what is valid.
-async function fill_sro_details(frm) {
-	let pending = (frm.doc.invoice_items || []).filter(
-		(row) => flt(row.tax_rate_value) !== 18 && !row.sro_schedule_no
+function extraRupeesPerQty(rateText) {
+	let match = String(rateText || "").match(/(?:rupees|rs\.?)\s+(\d+(?:\.\d+)?)\s+per/i);
+	return match ? flt(match[1]) : 0;
+}
+
+function saleTypeNeedsRetailPrice(saleType) {
+	return ["3rd Schedule Goods", "Goods as per SRO.297(|)/2023"].includes(cstr(saleType));
+}
+
+// Same sale types as di.invoice_rules.SRO_REQUIRED. Rate !== 18 is not the rule:
+// telecom 17% posted empty; mobile phones at 18% did not.
+function row_needs_sro(row) {
+	if (cstr(row.sro_schedule_no)) {
+		return false;
+	}
+	return [
+		"Exempt goods",
+		"Goods at zero-rate",
+		"Goods as per SRO.297(|)/2023",
+		"Goods at Reduced Rate",
+		"Mobile Phones",
+		"Petroleum Products",
+		"Electric Vehicle",
+		"Potassium Chlorate",
+		"CNG Sales"
+	].includes(cstr(row.sale_type));
+}
+
+async function load_sro_serials_for_row(frm, cdt, cdn) {
+	let row = locals[cdt][cdn];
+	if (!row.sro_schedule_no) {
+		frappe.model.set_value(cdt, cdn, "sro_item_serial_no", "");
+		return;
+	}
+
+	let serials = await frappe.xcall("di.integrations.reference_api.get_sro_serials_for_schedule", {
+		schedule: row.sro_schedule_no,
+		company: frm.doc.seller__business_name
+	});
+	if (!serials || !serials.length) {
+		frappe.msgprint(__("No SRO item serials found for {0}. Sync SRO Item Codes, or type the serial FBR gave you.", [row.sro_schedule_no]));
+		return;
+	}
+	if (serials.length === 1) {
+		frappe.model.set_value(cdt, cdn, "sro_item_serial_no", serials[0]);
+		return;
+	}
+	if (serials.includes(row.sro_item_serial_no)) {
+		return;
+	}
+
+	let serial = await pick_option(
+		__("SRO Item Serial under {0}", [row.sro_schedule_no]),
+		serials.map((value) => ({ label: value, value }))
 	);
+	if (serial) {
+		frappe.model.set_value(cdt, cdn, "sro_item_serial_no", serial);
+	}
+}
+
+// FBR rejects some sale types without an SRO schedule (0077) and rejects a
+// serial it does not recognise (0078). The schedule field is a Link select;
+// picking it opens the serial select.
+async function fill_sro_details(frm) {
+	let pending = (frm.doc.invoice_items || []).filter((row) => row_needs_sro(row));
 
 	if (!pending.length) {
-		frappe.msgprint(__("No rows need an SRO schedule. FBR only requires one when the rate is not 18%."));
+		frappe.msgprint(__("No rows need an SRO schedule for this sale type."));
 		return;
 	}
 
@@ -154,7 +243,8 @@ async function fill_sro_details(frm) {
 		}
 
 		let schedules = await frappe.xcall("di.integrations.reference_api.get_sro_schedules_for_rate", {
-			rate_id: rate_id
+			rate_id: rate_id,
+			company: frm.doc.seller__business_name
 		});
 
 		if (!schedules || !schedules.length) {
@@ -170,7 +260,8 @@ async function fill_sro_details(frm) {
 
 		let schedule = schedules.find((s) => String(s.sro_id) === chosen);
 		let serials = await frappe.xcall("di.integrations.reference_api.get_sro_items_for_schedule", {
-			sro_id: chosen
+			sro_id: chosen,
+			company: frm.doc.seller__business_name
 		});
 
 		if (!serials || !serials.length) {
@@ -184,13 +275,23 @@ async function fill_sro_details(frm) {
 		);
 		if (!serial) return;
 
-		frappe.model.set_value(row.doctype, row.name, "sro_schedule_no", schedule.sro_desc);
-		frappe.model.set_value(row.doctype, row.name, "sro_item_serial_no", serial);
+		row.sro_schedule_no = schedule.sro_desc;
+		row.sro_item_serial_no = serial;
+		frm.refresh_field("invoice_items");
 	}
 }
 
 function pick_option(title, options) {
 	return new Promise((resolve) => {
+		let settled = false;
+		const finish = (value) => {
+			if (settled) {
+				return;
+			}
+			settled = true;
+			resolve(value);
+		};
+
 		let d = new frappe.ui.Dialog({
 			title: title,
 			fields: [
@@ -205,11 +306,11 @@ function pick_option(title, options) {
 			primary_action_label: __("Use this"),
 			primary_action(values) {
 				let match = options.find((o) => o.label === values.choice);
+				finish(match ? match.value : null);
 				d.hide();
-				resolve(match ? match.value : null);
 			}
 		});
-		d.onhide = () => resolve(null);
+		d.onhide = () => finish(null);
 		d.show();
 	});
 }

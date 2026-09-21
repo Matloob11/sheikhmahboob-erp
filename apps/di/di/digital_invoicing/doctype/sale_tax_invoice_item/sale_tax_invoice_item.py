@@ -24,7 +24,7 @@ class SaleTaxInvoiceItem(Document):
 		sales_tax_applicable: DF.Currency
 		sales_tax_withheld_at_source: DF.Currency
 		sro_item_serial_no: DF.Data | None
-		sro_schedule_no: DF.Data | None
+		sro_schedule_no: DF.Link | None
 		tax_rate_value: DF.Float
 		total_values: DF.Currency
 		uom: DF.Data

@@ -27,6 +27,7 @@ from di.integrations.di_api import (
 	_make_request,
 	_round_currency,
 )
+from di.invoice_rules import fbr_product_description, petroleum_levy_on, settled_retail_price
 
 
 def post_sale_tax_invoice(doc, resync=False):
@@ -102,6 +103,7 @@ def build_sale_tax_invoice_payload(doc):
 	doc._sync_seller_details()
 	doc._sync_item_details()
 	doc._apply_scenario_sale_type()
+	doc._ensure_third_schedule_prices()
 	doc._calculate_totals()
 
 	invoice = Invoice(
@@ -131,16 +133,16 @@ def _build_item_payload(row):
 	sale_type = cstr(row.get("sale_type") or "")
 	extra_tax = "" if sale_type == "Goods at Reduced Rate" else _round_currency(row.get("extra_tax", 0))
 
-	return asdict(
+	payload = asdict(
 		InvoiceItem(
 			discount=_round_currency(row.get("discount", 0)),
 			fedPayable=_round_currency(row.get("fed_payable", 0)),
 			furtherTax=_round_currency(row.get("further_tax", 0)),
 			hsCode=cstr(row.get("hs_code") or ""),
 			extraTax=extra_tax,
-			productDescription=cstr(row.get("description") or ""),
+			productDescription=fbr_product_description(row.get("description"), sale_type),
 			quantity=round(float(row.get("quantity") or 0), 4),
-			rate=_format_rate(row.get("tax_rate_value", 0), sale_type),
+			rate=_format_rate(row.get("tax_rate_value", 0), sale_type, row.get("rate_in_percentage")),
 			salesTaxApplicable=_round_currency(row.get("sales_tax_applicable", 0)),
 			salesTaxWithheldAtSource=_round_currency(row.get("sales_tax_withheld_at_source", 0)),
 			sroItemSerialNo=cstr(row.get("sro_item_serial_no") or ""),
@@ -150,10 +152,18 @@ def _build_item_payload(row):
 			valueSalesExcludingST=_round_currency(row.get("value_sales_excluding_st", 0)),
 			saleType=sale_type,
 			fixedNotifiedValueOrRetailPrice=_round_currency(
-				row.get("fixed_notified_value_or_retail_price", 0)
+				settled_retail_price(
+					sale_type,
+					row.get("fixed_notified_value_or_retail_price"),
+					row.get("sale_rate"),
+				)
 			),
 		)
 	)
+	levy = petroleum_levy_on(sale_type, payload["quantity"])
+	if levy is not None:
+		payload["petroleumLevyOn"] = levy
+	return payload
 
 
 def _get_seller_token(doc):

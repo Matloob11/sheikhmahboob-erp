@@ -52,6 +52,62 @@ def is_enabled(company):
 	return frappe.db.get_value("DI Settings", {"company": company}, "enabled")
 
 
+@frappe.whitelist()
+def load_fbr_sale_types(company=None, save=1):
+	"""Put every official FBR sale type on this company's DI Settings table."""
+	frappe.has_permission("DI Settings", "write", throw=True)
+	from frappe.utils import cint
+
+	from di.constants import SRO_REQUIRED_SALE_TYPES
+	from di.fbr_scenarios import official_sale_types
+
+	company = company or frappe.defaults.get_global_default("company")
+	if not company:
+		frappe.throw(_("Company is required."))
+
+	names = official_sale_types()
+	created_masters = 0
+	for name in names:
+		if frappe.db.exists("Sale Type", name):
+			continue
+		frappe.get_doc(
+			{
+				"doctype": "Sale Type",
+				"sale_type_name": name,
+				"requires_sro": 1 if name in SRO_REQUIRED_SALE_TYPES else 0,
+			}
+		).insert(ignore_permissions=True)
+		created_masters += 1
+
+	already = []
+	added = []
+	if cint(save):
+		settings_name = frappe.db.get_value("DI Settings", {"company": company}, "name")
+		if not settings_name:
+			frappe.throw(_("Save DI Settings for {0} first.").format(company))
+		doc = frappe.get_doc("DI Settings", settings_name)
+		existing = {row.sale_type for row in doc.get("sale_types") or []}
+		for name in names:
+			if name in existing:
+				already.append(name)
+				continue
+			doc.append("sale_types", {"sale_type": name})
+			added.append(name)
+			existing.add(name)
+		if added:
+			doc.save()
+	else:
+		added = names
+
+	return {
+		"company": company,
+		"sale_types": names,
+		"added": added,
+		"already": already,
+		"created_masters": created_masters,
+	}
+
+
 def get_settings(company):
 	"""Get the DI Settings document for the given company.
 

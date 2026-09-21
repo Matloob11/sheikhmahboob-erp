@@ -1,0 +1,11 @@
+{
+ "custom_format": 1,
+ "default_print_language": "en",
+ "doc_type": "Client Panel",
+ "doctype": "Print Format",
+ "html": "",
+ "module": "Digital Invoicing",
+ "name": "Client Panel Welcome",
+ "print_format_type": "Jinja",
+ "standard": "Yes"
+}

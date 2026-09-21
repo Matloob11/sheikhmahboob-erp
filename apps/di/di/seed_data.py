@@ -6,6 +6,7 @@ from pathlib import Path
 import frappe
 
 from di.constants import PRODUCT_UOM_OPTIONS
+from di.fbr_scenarios import FBR_SCENARIOS
 
 HS_UOMS = list(PRODUCT_UOM_OPTIONS)
 
@@ -222,6 +223,31 @@ def seed_hs_codes(force=False):
 	frappe.db.set_default(HS_CODES_DIGEST_KEY, digest)
 
 	return {"inserted": inserted, "updated": updated, "skipped": skipped}
+
+
+def seed_fbr_scenarios():
+	"""Upsert SN001–SN028 into Scenario, creating Sale Types if missing."""
+	if not frappe.db.exists("DocType", "Scenario"):
+		return {"inserted": 0, "updated": 0, "sale_types": 0}
+
+	inserted = 0
+	updated = 0
+	sale_types = 0
+	for sn_no, description, sale_type in FBR_SCENARIOS:
+		if frappe.db.exists("DocType", "Sale Type") and sale_type and not frappe.db.exists("Sale Type", sale_type):
+			frappe.get_doc({"doctype": "Sale Type", "sale_type_name": sale_type}).insert(ignore_permissions=True)
+			sale_types += 1
+
+		values = {"description": description, "sale__purchase_type": sale_type}
+		if frappe.db.exists("Scenario", sn_no):
+			frappe.db.set_value("Scenario", sn_no, values, update_modified=False)
+			updated += 1
+			continue
+
+		frappe.get_doc({"doctype": "Scenario", "sn_no": sn_no, **values}).insert(ignore_permissions=True)
+		inserted += 1
+
+	return {"inserted": inserted, "updated": updated, "sale_types": sale_types}
 
 
 def seed_sandbox_scenarios_from_scenarios():

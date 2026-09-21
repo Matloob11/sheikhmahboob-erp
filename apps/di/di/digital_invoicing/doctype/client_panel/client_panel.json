@@ -1,0 +1,140 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:email",
+ "creation": "2026-08-21 00:00:00.000000",
+ "default_print_format": "Client Panel Welcome",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "access_section",
+  "full_name",
+  "email",
+  "column_break_access",
+  "mode",
+  "disabled",
+  "assign_section",
+  "assigned_sellers",
+  "login_section",
+  "login_url",
+  "user",
+  "column_break_login",
+  "welcome_password"
+ ],
+ "fields": [
+  {
+   "fieldname": "access_section",
+   "fieldtype": "Section Break",
+   "label": "Access"
+  },
+  {
+   "fieldname": "full_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Full Name",
+   "reqd": 1
+  },
+  {
+   "description": "This is the login. It cannot be changed after save.",
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Email / Login",
+   "options": "Email",
+   "reqd": 1,
+   "set_only_once": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "column_break_access",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Single Client",
+   "description": "Single Client: they may use at most one Seller / Company. Multi Client: they can add as many as they need.",
+   "fieldname": "mode",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Mode",
+   "options": "Single Client\nMulti Client",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Disabled"
+  },
+  {
+   "description": "Leave empty if they will add their own Seller / Company after login. Selected sellers' invoices, buyers and items become visible to them. HS codes, UOMs and other FBR masters are always shared.",
+   "fieldname": "assign_section",
+   "fieldtype": "Section Break",
+   "label": "Assign Existing Clients"
+  },
+  {
+   "fieldname": "assigned_sellers",
+   "fieldtype": "Table",
+   "label": "Assigned Clients",
+   "options": "Client Panel Seller"
+  },
+  {
+   "fieldname": "login_section",
+   "fieldtype": "Section Break",
+   "label": "Login Details"
+  },
+  {
+   "fieldname": "login_url",
+   "fieldtype": "Data",
+   "label": "Login URL",
+   "read_only": 1
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "User",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_login",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Shown on the Welcome PDF. Stored encrypted. Use Reset Password to generate a new one.",
+   "fieldname": "welcome_password",
+   "fieldtype": "Password",
+   "label": "Welcome Password",
+   "print_hide": 0,
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-08-21 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Digital Invoicing",
+ "name": "Client Panel",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "full_name",
+ "track_changes": 1
+}

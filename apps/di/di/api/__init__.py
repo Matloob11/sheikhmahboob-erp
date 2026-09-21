@@ -39,6 +39,14 @@ def get_invoice_preview(doctype, name):
 
 
 @frappe.whitelist()
+def get_sale_invoice_company_cards():
+	"""Sellers plus sandbox/production invoice counts for the Sale Invoices picker."""
+	from di.invoice_picker import get_sale_invoice_company_cards as _cards
+
+	return _cards()
+
+
+@frappe.whitelist()
 def post_sale_tax_invoice(name):
 	"""Post a submitted standalone Sale Tax Invoice to FBR."""
 	from di.integrations.sale_tax_invoice_api import post_sale_tax_invoice as _post
@@ -256,6 +264,38 @@ def get_setup_status(company=None):
 	)
 
 	return {"company": company, "checks": checks}
+
+
+@frappe.whitelist()
+def get_sandbox_pending_scenarios(company=None):
+	"""Inspect the DI Settings token and list sandbox scenarios still to submit."""
+	frappe.has_permission("DI Settings", "write", throw=True)
+	from di.sandbox_drafts import list_sandbox_scenarios
+
+	company = company or frappe.defaults.get_global_default("company")
+	if not company:
+		frappe.throw(_("Company is required."))
+	return list_sandbox_scenarios(company)
+
+
+@frappe.whitelist()
+def create_sandbox_scenario_drafts(company=None, scenario_ids=None):
+	"""Validate and submit Sale Tax Invoices for the selected sandbox scenarios."""
+	frappe.has_permission("DI Settings", "write", throw=True)
+	from di.sandbox_drafts import create_sandbox_drafts
+
+	company = company or frappe.defaults.get_global_default("company")
+	if isinstance(scenario_ids, str):
+		scenario_ids = frappe.parse_json(scenario_ids)
+	return create_sandbox_drafts(company, scenario_ids or [])
+
+
+@frappe.whitelist()
+def load_fbr_sale_types(company=None, save=1):
+	"""Fill DI Settings sale types from the official FBR list."""
+	from di.digital_invoicing.doctype.di_settings.di_settings import load_fbr_sale_types as _load
+
+	return _load(company=company, save=save)
 
 
 @frappe.whitelist()

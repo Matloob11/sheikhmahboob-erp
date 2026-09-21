@@ -160,6 +160,7 @@ class TestTaxItem(FrappeTestCase):
 		meta = self.get_meta("Tax Item")
 
 		self.assertEqual(meta.get_field("transaction_type").options, "Transaction Type")
+		self.assertEqual(meta.get_field("transaction_type").allow_in_quick_entry, 1)
 		self.assertEqual(meta.get_field("rate_id").fieldtype, "Int")
 		self.assertEqual(meta.get_field("rate_id").read_only, 1)
 		self.assertEqual(meta.get_field("rate_in_p").reqd, 1)

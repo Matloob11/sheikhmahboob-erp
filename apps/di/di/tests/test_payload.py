@@ -107,6 +107,21 @@ class TestRateFormatting(unittest.TestCase):
 	def test_zero_rate_is_not_blank(self):
 		self.assertEqual(di_api._format_rate(0, "Goods at zero-rate"), "0%")
 
+	def test_rupee_and_compound_rate_literals_are_not_forced_to_percent(self):
+		self.assertTrue(di_api._is_fbr_rate_literal("Rs.2"))
+		self.assertTrue(di_api._is_fbr_rate_literal("18% along with rupees 60 per kilogram"))
+		self.assertTrue(di_api._is_fbr_rate_literal("18% and Rs. 80 per Liter"))
+		self.assertFalse(di_api._is_fbr_rate_literal("18%"))
+		self.assertEqual(
+			di_api._format_rate(18, "Goods (FED in ST Mode)", "18% and Rs. 80 per Liter"),
+			"18% and Rs. 80 per Liter",
+		)
+		self.assertEqual(di_api._format_rate(2, "Cement /Concrete Block", "Rs.2"), "Rs.2")
+		self.assertEqual(
+			di_api._format_rate(18, "Potassium Chlorate", "18% along with rupees 60 per kilogram"),
+			"18% along with rupees 60 per kilogram",
+		)
+
 
 class TestRounding(unittest.TestCase):
 	def test_half_rounds_up_like_currency(self):

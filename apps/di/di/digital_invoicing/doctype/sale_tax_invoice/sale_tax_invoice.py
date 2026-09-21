@@ -3,6 +3,15 @@ from decimal import ROUND_HALF_UP, Decimal
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from frappe.utils import cstr
+
+from di.invoice_rules import (
+	extra_rupees_per_qty,
+	row_needs_retail_price,
+	row_needs_sro,
+	sale_type_needs_retail_price,
+	settled_retail_price,
+)
 
 
 def _as_decimal(value) -> Decimal:
@@ -36,6 +45,7 @@ class SaleTaxInvoice(Document):
 		buyer_registration_type: DF.Data | None
 		fbr_invoice_no: DF.Data | None
 		fbr_environment: DF.Literal["Sandbox", "Production"]
+		sandbox_run_status: DF.Literal["", "Pending Review", "FBR Validated", "Already Successful"]
 		invoice_date: DF.Date
 		invoice_items: DF.Table[SaleTaxInvoiceItem]
 		invoice_type: DF.Literal["Sale Invoice"]
@@ -57,12 +67,17 @@ class SaleTaxInvoice(Document):
 		self._sync_item_details()
 		self._validate_seller_scope()
 		self._apply_scenario_sale_type()
+		self._ensure_third_schedule_prices()
 		self._calculate_totals()
 		self._set_qr_code_data()
 
 	def before_submit(self):
 		if not self.get("invoice_items"):
 			frappe.throw(_("At least one invoice item is required."))
+		self._apply_scenario_sale_type()
+		self._ensure_third_schedule_prices()
+		self._validate_sro()
+		self._validate_third_schedule_price()
 		if not self.fbr_invoice_no:
 			from di.integrations.sale_tax_invoice_api import post_sale_tax_invoice
 
@@ -151,7 +166,35 @@ class SaleTaxInvoice(Document):
 			row.uom = item.product_uom
 			row.rate_in_percentage = item.tax_desc
 			row.tax_rate_value = item.rate_in_p
-			row.fixed_notified_value_or_retail_price = item.fixed_rs
+			# FBR 0090 treats 0 as missing. Do not wipe a recipe/sale-rate value.
+			if item.fixed_rs:
+				row.fixed_notified_value_or_retail_price = item.fixed_rs
+
+	def _ensure_third_schedule_prices(self):
+		for row in self.get("invoice_items") or []:
+			if not row_needs_retail_price(row.sale_type, row.fixed_notified_value_or_retail_price):
+				continue
+			row.fixed_notified_value_or_retail_price = settled_retail_price(
+				row.sale_type, row.fixed_notified_value_or_retail_price, row.sale_rate
+			)
+
+	def _validate_third_schedule_price(self):
+		for row in self.get("invoice_items") or []:
+			if row_needs_retail_price(row.sale_type, row.fixed_notified_value_or_retail_price):
+				frappe.throw(
+					_(
+						"Row {0}: sale type {1} needs a Fixed/Notified Value or Retail Price."
+					).format(row.idx, row.sale_type)
+				)
+
+	def _validate_sro(self):
+		for row in self.get("invoice_items") or []:
+			if row_needs_sro(row.tax_rate_value, row.sale_type, row.sro_schedule_no):
+				frappe.throw(
+					_(
+						"Row {0}: FBR needs an SRO Schedule for sale type {1}. Pick one in the item row or use Fill SRO Details."
+					).format(row.idx, row.sale_type)
+				)
 
 	def _apply_scenario_sale_type(self):
 		if not self.scenario_id:
@@ -178,9 +221,10 @@ class SaleTaxInvoice(Document):
 
 			value_sales = max(quantity * sale_rate - discount, Decimal("0"))
 			tax_base = value_sales
-			if row.sale_type == "3rd Schedule Goods" and fixed_price:
+			if sale_type_needs_retail_price(row.sale_type) and fixed_price:
 				tax_base = fixed_price * quantity if quantity else fixed_price
 			sales_tax = tax_base * tax_rate / Decimal("100")
+			sales_tax += extra_rupees_per_qty(row.get("rate_in_percentage")) * quantity
 
 			extra_tax = _as_decimal(row.extra_tax)
 			further_tax = _as_decimal(row.further_tax)

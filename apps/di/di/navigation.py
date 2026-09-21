@@ -6,6 +6,7 @@ WORKSPACE_NAME = "Digital Invoicing"
 LEARN_URL = "https://docs.kodlyft.com/digital-invoicing/introduction"
 
 NAVIGATION_LINKS = [
+	("Client Panels", "Client Panel", "Blue"),
 	("Sale Invoices", "Sale Tax Invoice", "Blue"),
 	("Buyers", "Buyer", "Green"),
 	("Seller / Company", "Seller Or Company", "Grey"),

@@ -71,14 +71,24 @@ def _round_currency(value) -> float:
 	return float(_as_decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
-def _format_rate(percentage, sale_type) -> str:
+def _is_fbr_rate_literal(rate_text: str) -> bool:
+	text = (rate_text or "").strip()
+	if not text:
+		return False
+	lower = text.lower()
+	return text == "Exempt" or "rs" in lower or "rupee" in lower or "along with" in lower
+
+
+def _format_rate(percentage, sale_type, rate_text=None) -> str:
 	if sale_type == "Exempt goods":
 		return "Exempt"
+	if _is_fbr_rate_literal(rate_text or ""):
+		return str(rate_text).strip()
 	normalized = _as_decimal(percentage).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP).normalize()
-	rate_text = format(normalized, "f")
-	if "." in rate_text:
-		rate_text = rate_text.rstrip("0").rstrip(".")
-	return f"{rate_text or '0'}%"
+	formatted = format(normalized, "f")
+	if "." in formatted:
+		formatted = formatted.rstrip("0").rstrip(".")
+	return f"{formatted or '0'}%"
 
 
 def _safe_str(value) -> str:

@@ -20,9 +20,13 @@ STATL_BASE_URL = "https://gw.fbr.gov.pk/dist/v1"
 SRO_REQUIRED_SALE_TYPES = [
 	"Exempt goods",
 	"Goods at zero-rate",
-	"3rd Schedule Goods",
 	"Goods as per SRO.297(|)/2023",
 	"Goods at Reduced Rate",
+	"Mobile Phones",
+	"Petroleum Products",
+	"Electric Vehicle",
+	"Potassium Chlorate",
+	"CNG Sales",
 ]
 
 INVOICE_TYPE_SALE = "Sale Invoice"

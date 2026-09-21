@@ -135,6 +135,7 @@
   },
   {
    "fetch_from": "description.fixed_rs",
+   "fetch_if_empty": 1,
    "fieldname": "fixed_notified_value_or_retail_price",
    "fieldtype": "Float",
    "label": "Fixed Notified Value Or Retail Price"
@@ -159,8 +160,10 @@
   },
   {
    "fieldname": "sro_schedule_no",
-   "fieldtype": "Data",
-   "label": "SRO Schedule No"
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "SRO Schedule No",
+   "options": "SRO Schedule"
   },
   {
    "default": "0",
@@ -183,12 +186,13 @@
   {
    "fieldname": "sro_item_serial_no",
    "fieldtype": "Data",
+   "in_list_view": 1,
    "label": "SRO Item Serial No"
   }
  ],
  "istable": 1,
  "links": [],
- "modified": "2026-05-20 00:00:00.000000",
+ "modified": "2026-08-31 18:30:00.000000",
  "modified_by": "Administrator",
  "module": "Digital Invoicing",
  "name": "Sale Tax Invoice Item",

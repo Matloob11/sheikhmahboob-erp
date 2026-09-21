@@ -405,6 +405,36 @@ def get_sro_items_for_schedule(sro_id, date=None, company=None):
 
 
 @frappe.whitelist()
+def get_sro_serials_for_schedule(schedule=None, company=None, date=None):
+	"""Serial strings FBR accepts under one SRO Schedule name.
+
+	The invoice row stores the serial text (70, 1(A), Region-I), not the SRO Item
+	hash name, so this returns those texts for the second select box.
+	"""
+	schedule = cstr(schedule).strip()
+	if not schedule:
+		return []
+
+	local = frappe.get_all(
+		"SRO Item",
+		filters={"sro_schedule": schedule},
+		pluck="sro_item_desc",
+	)
+	serials = [cstr(row).strip() for row in local if cstr(row).strip()]
+	if serials:
+		return list(dict.fromkeys(serials))
+
+	sro_id = frappe.db.get_value("SRO Schedule", schedule, "sro_id")
+	if not sro_id:
+		return []
+	return [
+		cstr(row.get("serial")).strip()
+		for row in get_sro_items_for_schedule(sro_id, date=date, company=company)
+		if cstr(row.get("serial")).strip()
+	]
+
+
+@frappe.whitelist()
 def sync_sale_type_rates(date=None, trans_type_id=None, origination_supplier=None, company=None):
 	"""Sync sale type to rate mappings from FBR API v2."""
 	data = get_sale_type_rates(date=date, trans_type_id=trans_type_id, origination_supplier=origination_supplier, company=company)
@@ -478,7 +508,7 @@ def sync_sro_schedules_for_rates(date=None, company=None):
 @frappe.whitelist()
 def sync_all_reference_data(company=None):
 	"""Sync API-backed reference data and local lookup rows used by the workspace."""
-	from di.seed_data import seed_di_error_codes, seed_sandbox_scenarios_from_scenarios
+	from di.seed_data import seed_di_error_codes, seed_fbr_scenarios, seed_sandbox_scenarios_from_scenarios
 
 	results = []
 	for func in (
@@ -495,6 +525,7 @@ def sync_all_reference_data(company=None):
 		except Exception as exc:
 			results.append({"message": _("{0} failed: {1}").format(func.__name__, str(exc))})
 
+	results.append({"message": _("FBR scenarios seeded"), "result": seed_fbr_scenarios()})
 	results.append({"message": _("Sandbox scenarios seeded"), "result": seed_sandbox_scenarios_from_scenarios()})
 	results.append({"message": _("DI error codes seeded"), "result": seed_di_error_codes()})
 
