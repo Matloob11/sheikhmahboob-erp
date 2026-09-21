@@ -81,6 +81,11 @@ export interface Client {
   registeredOn?: string;
   archived?: boolean;
   cnicAsRegistration?: boolean;
+  /** Hand-marked go-live checklist (desk only). */
+  goLivePosRegistered?: boolean;
+  goLiveIrisChecked?: boolean;
+  /** Set when a sandbox invoice posts via server queue for this client. */
+  goLiveSandboxServerOkAt?: number;
   createdAt: number;
   updatedAt: number;
 }

@@ -38,12 +38,25 @@ export async function userFromSessionToken(token: string | undefined): Promise<A
     id: string;
     email: string;
     role: UserRole;
+    disabled: boolean;
   }>(
-    `SELECT u.id, u.email, u.role
+    `SELECT u.id, u.email, u.role, COALESCE(u.disabled, false) AS disabled
      FROM sessions s
      JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = $1 AND s.expires_at > now()`,
     [hashToken(token)],
   );
-  return result.rows[0] ?? null;
+  const row = result.rows[0];
+  if (!row) return null;
+  if (row.disabled) {
+    await destroySession(token);
+    return null;
+  }
+  return { id: row.id, email: row.email, role: row.role };
+}
+
+/** Drop every session for a user (disable / password reset). */
+export async function destroySessionsForUser(userId: string): Promise<number> {
+  const result = await pool.query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
+  return result.rowCount ?? 0;
 }

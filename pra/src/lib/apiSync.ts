@@ -96,10 +96,33 @@ export async function loginForSync(email: string, password: string): Promise<str
     body: JSON.stringify({ email, password }),
   });
   if (!res.ok) throw new Error(res.status === 423 ? "API account locked." : "API login failed.");
-  const body = (await res.json()) as { token?: string };
+  const body = (await res.json()) as { token?: string; role?: string };
   if (!body.token) throw new Error("API login returned no token.");
   localStorage.setItem(API_TOKEN_KEY, body.token);
+  if (body.role) localStorage.setItem("daftar.apiRole", body.role);
   return body.token;
+}
+
+export function apiRole(): "owner" | "staff" | null {
+  const r = localStorage.getItem("daftar.apiRole");
+  return r === "owner" || r === "staff" ? r : null;
+}
+
+export async function logoutApi(): Promise<void> {
+  const token = localStorage.getItem(API_TOKEN_KEY);
+  try {
+    if (token) {
+      await fetch(`${apiBase()}/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: "omit",
+      });
+    }
+  } catch {
+    // Still clear local token
+  }
+  localStorage.removeItem(API_TOKEN_KEY);
+  localStorage.removeItem("daftar.apiRole");
 }
 
 function tokenOrThrow(): string {

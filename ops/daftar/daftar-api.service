@@ -10,7 +10,7 @@ Group=daftar
 WorkingDirectory=/opt/daftar-api
 EnvironmentFile=/etc/daftar-api.env
 ExecStart=/usr/bin/node dist/src/index.js
-Restart=on-failure
+Restart=always
 RestartSec=5
 # Soft cap — leave headroom for Frappe on this 8 GB box.
 MemoryMax=400M

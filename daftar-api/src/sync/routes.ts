@@ -111,6 +111,7 @@ export async function registerSyncRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/sync/push", async (request, reply) => {
     const user = await requireAuth(request, reply);
     if (!user) return;
+    const actor = user;
     const parsed = pushSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_body" });
 
@@ -124,13 +125,13 @@ export async function registerSyncRoutes(app: FastifyInstance): Promise<void> {
         if (!id) continue;
         const existing = await client.query(`SELECT * FROM clients WHERE id = $1`, [id]);
         if (!(existing.rowCount ?? 0)) {
-          if (user.role !== "owner") {
+          if (actor.role !== "owner") {
             conflicts.push({ entity: "client", id, reason: "staff_cannot_create" });
             skipClient.add(id);
           }
           continue;
         }
-        if (!(await assertClientAccess(client, user, id))) {
+        if (!(await assertClientAccess(client, actor, id))) {
           conflicts.push({ entity: "client", id, reason: "no_access" });
           skipClient.add(id);
           continue;
@@ -159,13 +160,31 @@ export async function registerSyncRoutes(app: FastifyInstance): Promise<void> {
         const id = str(raw.id);
         const clientId = str(raw.clientId);
         if (!id || !clientId) continue;
-        if (!(await assertClientAccess(client, user, clientId))) {
+        if (!(await assertClientAccess(client, actor, clientId))) {
           conflicts.push({ entity: "invoice", id, reason: "no_access" });
           skipInvoice.add(id);
           continue;
         }
         const existing = await client.query(`SELECT * FROM invoices WHERE id = $1`, [id]);
         if (existing.rows[0]) {
+          const existingClientId = String(existing.rows[0].client_id ?? "");
+          if (existingClientId && existingClientId !== clientId) {
+            // Staff must not move invoices across clients; owner may.
+            if (actor.role !== "owner") {
+              conflicts.push({ entity: "invoice", id, reason: "client_reassign_forbidden" });
+              skipInvoice.add(id);
+              continue;
+            }
+            if (!(await assertClientAccess(client, actor, existingClientId))) {
+              conflicts.push({ entity: "invoice", id, reason: "no_access" });
+              skipInvoice.add(id);
+              continue;
+            }
+          } else if (!(await assertClientAccess(client, actor, existingClientId))) {
+            conflicts.push({ entity: "invoice", id, reason: "no_access" });
+            skipInvoice.add(id);
+            continue;
+          }
           const decision = mergeInvoice(
             {
               status: String(existing.rows[0].status ?? ""),
@@ -182,19 +201,38 @@ export async function registerSyncRoutes(app: FastifyInstance): Promise<void> {
         }
       }
 
+      const skipChild = new Set<string>();
+      async function gateChild(
+        entity: string,
+        rows: Array<Record<string, unknown>>,
+      ): Promise<Array<Record<string, unknown>>> {
+        const out: Array<Record<string, unknown>> = [];
+        for (const raw of rows) {
+          const id = str(raw.id) || `${entity}:${str(raw.clientId)}`;
+          const clientId = str(raw.clientId);
+          if (!clientId || !(await assertClientAccess(client, actor, clientId))) {
+            conflicts.push({ entity, id, reason: "no_access" });
+            skipChild.add(id);
+            continue;
+          }
+          out.push(raw);
+        }
+        return out;
+      }
+
       const backup = deskBackupSchema.parse({
         version: 5,
         exportedAt: Date.now(),
         clients: parsed.data.clients.filter((c) => !skipClient.has(str(c.id))),
         invoices: parsed.data.invoices.filter((inv) => !skipInvoice.has(str(inv.id))),
-        purchases: parsed.data.purchases,
-        returns: parsed.data.returns,
-        psids: parsed.data.psids,
-        buyers: parsed.data.buyers,
-        items: parsed.data.items,
+        purchases: await gateChild("purchase", parsed.data.purchases),
+        returns: await gateChild("return", parsed.data.returns),
+        psids: await gateChild("psid", parsed.data.psids),
+        buyers: await gateChild("buyer", parsed.data.buyers),
+        items: await gateChild("item", parsed.data.items),
       });
 
-      const counts = await importDeskBackup(client, backup, user.id);
+      const counts = await importDeskBackup(client, backup, actor.id);
       return (
         counts.clients +
         counts.invoices +
@@ -207,7 +245,7 @@ export async function registerSyncRoutes(app: FastifyInstance): Promise<void> {
     });
 
     await writeAudit(pool, {
-      actorUserId: user.id,
+      actorUserId: actor.id,
       kind: "sync.push",
       detail: JSON.stringify({ applied: result, conflicts: conflicts.length }),
     });

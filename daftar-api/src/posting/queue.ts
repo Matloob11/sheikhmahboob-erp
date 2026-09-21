@@ -1,5 +1,8 @@
 import type { Pool, PoolClient } from "pg";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { pool } from "../db.js";
+import { env } from "../env.js";
 import { hashPayload, newId } from "./praClient.js";
 
 export type PostQueueStatus = "pending" | "sending" | "posted" | "failed" | "unknown";
@@ -408,13 +411,38 @@ export async function reconcileUnknown(options: {
 }
 
 export async function ownerStatusSummary(): Promise<{
+  apiUp: boolean;
+  postgresUp: boolean;
+  newestBackupAgeSec: number | null;
+  newestBackupAt: string | null;
   depth: Record<PostQueueStatus, number>;
   oldestPendingAgeSec: number | null;
   lastErrorByClient: Array<{ clientId: string; businessName: string; lastError: string; at: string }>;
 }> {
-  const depthRows = await pool.query<{ status: PostQueueStatus; n: string }>(
-    `SELECT status, count(*)::text AS n FROM post_queue GROUP BY status`,
-  );
+  let postgresUp = false;
+  try {
+    await pool.query("SELECT 1");
+    postgresUp = true;
+  } catch {
+    postgresUp = false;
+  }
+
+  let newestBackupAgeSec: number | null = null;
+  let newestBackupAt: string | null = null;
+  try {
+    const raw = readFileSync(resolve(env.root, "var/last_dump.json"), "utf8");
+    const parsed = JSON.parse(raw) as { at?: string };
+    if (parsed.at) {
+      const atMs = Date.parse(parsed.at);
+      if (Number.isFinite(atMs)) {
+        newestBackupAt = new Date(atMs).toISOString();
+        newestBackupAgeSec = Math.max(0, Math.floor((Date.now() - atMs) / 1000));
+      }
+    }
+  } catch {
+    // Marker missing until first dump after deploy
+  }
+
   const depth: Record<PostQueueStatus, number> = {
     pending: 0,
     sending: 0,
@@ -422,39 +450,59 @@ export async function ownerStatusSummary(): Promise<{
     failed: 0,
     unknown: 0,
   };
-  for (const row of depthRows.rows) depth[row.status] = Number(row.n);
+  let oldestPendingAgeSec: number | null = null;
+  const lastErrorByClient: Array<{
+    clientId: string;
+    businessName: string;
+    lastError: string;
+    at: string;
+  }> = [];
 
-  const oldest = await pool.query<{ age_sec: string }>(
-    `SELECT EXTRACT(EPOCH FROM (now() - created_at))::bigint::text AS age_sec
-     FROM post_queue WHERE status = 'pending'
-     ORDER BY created_at ASC LIMIT 1`,
-  );
-  const oldestPendingAgeSec = oldest.rows[0] ? Number(oldest.rows[0].age_sec) : null;
+  if (postgresUp) {
+    const depthRows = await pool.query<{ status: PostQueueStatus; n: string }>(
+      `SELECT status, count(*)::text AS n FROM post_queue GROUP BY status`,
+    );
+    for (const row of depthRows.rows) depth[row.status] = Number(row.n);
 
-  const errors = await pool.query<{
-    client_id: string;
-    business_name: string;
-    last_error: string;
-    updated_at: Date;
-  }>(
-    `SELECT DISTINCT ON (pq.client_id)
-       pq.client_id, c.business_name, pq.last_error, pq.updated_at
-     FROM post_queue pq
-     JOIN clients c ON c.id = pq.client_id
-     WHERE pq.last_error <> ''
-     ORDER BY pq.client_id, pq.updated_at DESC
-     LIMIT 50`,
-  );
+    const oldest = await pool.query<{ age_sec: string }>(
+      `SELECT EXTRACT(EPOCH FROM (now() - created_at))::bigint::text AS age_sec
+       FROM post_queue WHERE status = 'pending'
+       ORDER BY created_at ASC LIMIT 1`,
+    );
+    oldestPendingAgeSec = oldest.rows[0] ? Number(oldest.rows[0].age_sec) : null;
+
+    const errors = await pool.query<{
+      client_id: string;
+      business_name: string;
+      last_error: string;
+      updated_at: Date;
+    }>(
+      `SELECT DISTINCT ON (pq.client_id)
+         pq.client_id, c.business_name, pq.last_error, pq.updated_at
+       FROM post_queue pq
+       JOIN clients c ON c.id = pq.client_id
+       WHERE pq.last_error <> ''
+       ORDER BY pq.client_id, pq.updated_at DESC
+       LIMIT 50`,
+    );
+    for (const r of errors.rows) {
+      lastErrorByClient.push({
+        clientId: r.client_id,
+        businessName: r.business_name,
+        lastError: r.last_error,
+        at: new Date(r.updated_at).toISOString(),
+      });
+    }
+  }
 
   return {
+    apiUp: true,
+    postgresUp,
+    newestBackupAgeSec,
+    newestBackupAt,
     depth,
     oldestPendingAgeSec,
-    lastErrorByClient: errors.rows.map((r) => ({
-      clientId: r.client_id,
-      businessName: r.business_name,
-      lastError: r.last_error,
-      at: new Date(r.updated_at).toISOString(),
-    })),
+    lastErrorByClient,
   };
 }
 

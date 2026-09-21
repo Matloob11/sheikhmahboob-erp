@@ -8,6 +8,7 @@ import { bootDesk, exportReadableBackup, type BootOutcome } from "./lib/appBoot"
 import { BuyersPage } from "./pages/Buyers";
 import { ClientsPage } from "./pages/Clients";
 import { DeskPage } from "./pages/Desk";
+import { GoLivePage } from "./pages/GoLive";
 import { InvoiceEditorPage } from "./pages/InvoiceEditor";
 import { InvoicesPage } from "./pages/Invoices";
 import { ItemsPage } from "./pages/Items";
@@ -24,6 +25,7 @@ function deskChildRoutes(home: string) {
       <Route index element={<DeskPage />} />
       <Route path="today" element={<TodayPage />} />
       <Route path="clients" element={<ClientsPage />} />
+      <Route path="clients/:clientId/go-live" element={<GoLivePage />} />
       <Route path="buyers" element={<BuyersPage />} />
       <Route path="items" element={<ItemsPage />} />
       <Route path="invoices" element={<InvoicesPage />} />

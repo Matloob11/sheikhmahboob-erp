@@ -13,6 +13,13 @@ import {
   type AuthUser,
 } from "./session.js";
 
+/** Cached dummy hash so missing-email logins take similar time (no enumeration). */
+let dummyHash: string | null = null;
+async function dummyPasswordHash(): Promise<string> {
+  if (!dummyHash) dummyHash = await hashPassword("not-a-real-user");
+  return dummyHash;
+}
+
 const credentialsSchema = z.object({
   email: z.string().email().max(320),
   password: z.string().min(8).max(200),
@@ -58,9 +65,18 @@ function clearSessionCookie(reply: FastifyReply): void {
 
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/auth/bootstrap-owner", async (request, reply) => {
+    // Production: only allow when BOOTSTRAP_SECRET matches (or already bootstrapped → 409).
+    if (process.env.NODE_ENV === "production") {
+      const expected = process.env.BOOTSTRAP_SECRET ?? "";
+      const got = String(request.headers["x-bootstrap-secret"] ?? "");
+      if (!expected || got !== expected) {
+        return reply.code(403).send({ error: "bootstrap_disabled" });
+      }
+    }
+
     const parsed = credentialsSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "invalid_body", detail: parsed.error.flatten() });
+      return reply.code(400).send({ error: "invalid_body" });
     }
 
     const existing = await pool.query(`SELECT 1 FROM users WHERE role = 'owner' LIMIT 1`);
@@ -112,17 +128,24 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         password_hash: string;
         failed_logins: number;
         locked_until: Date | null;
+        disabled: boolean;
       }>(
-        `SELECT id, email, role, password_hash, failed_logins, locked_until
+        `SELECT id, email, role, password_hash, failed_logins, locked_until,
+                COALESCE(disabled, false) AS disabled
          FROM users WHERE email = $1`,
         [email],
       );
       const user = result.rows[0];
       if (!user) {
+        await verifyPassword(await dummyPasswordHash(), parsed.data.password);
+        return reply.code(401).send({ error: "invalid_credentials" });
+      }
+      if (user.disabled) {
+        await verifyPassword(user.password_hash, parsed.data.password);
         return reply.code(401).send({ error: "invalid_credentials" });
       }
       if (isLocked(user.locked_until)) {
-        return reply.code(423).send({ error: "locked", lockedUntil: user.locked_until });
+        return reply.code(423).send({ error: "locked" });
       }
 
       const ok = await verifyPassword(user.password_hash, parsed.data.password);
@@ -134,7 +157,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
             `UPDATE users SET failed_logins = $2, locked_until = $3, updated_at = now() WHERE id = $1`,
             [user.id, fails, until.toISOString()],
           );
-          return reply.code(423).send({ error: "locked", lockedUntil: until });
+          return reply.code(423).send({ error: "locked" });
         }
         await pool.query(
           `UPDATE users SET failed_logins = $2, updated_at = now() WHERE id = $1`,

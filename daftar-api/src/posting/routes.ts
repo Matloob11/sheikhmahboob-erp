@@ -168,6 +168,17 @@ export async function registerPostingRoutes(app: FastifyInstance): Promise<void>
     const id = (request.params as { id: string }).id;
     const parsed = modeSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_body" });
+    if (parsed.data.postingMode === "server") {
+      const sandboxOk = await pool.query(
+        `SELECT 1 FROM post_queue
+         WHERE client_id = $1 AND environment = 'sandbox' AND status = 'posted'
+         LIMIT 1`,
+        [id],
+      );
+      if (!(sandboxOk.rowCount ?? 0)) {
+        return reply.code(409).send({ error: "sandbox_server_post_required" });
+      }
+    }
     const result = await pool.query(
       `UPDATE clients SET posting_mode = $2, updated_at = EXTRACT(EPOCH FROM now())::bigint * 1000
        WHERE id = $1 RETURNING id, posting_mode`,

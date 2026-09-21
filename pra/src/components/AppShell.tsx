@@ -14,6 +14,7 @@ import { KeyboardHelp } from "./KeyboardHelp";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LiveOpsHost } from "./LiveOpsHost";
 import { Logo } from "./Logo";
+import { OwnerHealthBanner } from "./OwnerHealthBanner";
 import { useDesk } from "../context/DeskContext";
 import { NoticeStack } from "../context/NoticeContext";
 import { registrationDisplay } from "../domain/clients";
@@ -437,6 +438,7 @@ export function AppShell() {
         </nav>
       </aside>
       <div className="stage">
+        <OwnerHealthBanner />
         <LiveOpsHost>
           <main id="workspace" className="page wide" tabIndex={-1}>
             <ErrorBoundary resetKey={location.pathname}>

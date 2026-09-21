@@ -5,13 +5,19 @@ import { useDesk } from "../../context/DeskContext";
 import { useNotice } from "../../context/NoticeContext";
 import { db } from "../../db";
 import { notifyDb } from "../../hooks/useLive";
-import { hasApiToken } from "../../lib/apiSync";
+import { hasApiToken, logoutApi } from "../../lib/apiSync";
 import {
   fetchOwnerPostStatus,
   postOutboxDepth,
   setClientPostingMode,
   type OwnerPostStatus,
 } from "../../lib/postApi";
+import { markLaptopBackupPulled } from "../../components/OwnerHealthBanner";
+
+function ageHours(sec: number | null): string {
+  if (sec == null) return "—";
+  return `${(sec / 3600).toFixed(1)}h`;
+}
 
 export function PostingStatusSection() {
   const { clients } = useDesk();
@@ -43,7 +49,6 @@ export function PostingStatusSection() {
 
   useEffect(() => {
     void refresh();
-    // Owner status is loaded on mount; refresh button reloads later.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional once
   }, []);
 
@@ -59,7 +64,13 @@ export function PostingStatusSection() {
       push("good", `${row?.businessName ?? clientId}: posting mode → ${mode}`);
       await refresh();
     } catch (err) {
-      push("bad", err instanceof Error ? err.message : "Mode change failed.");
+      const msg = err instanceof Error ? err.message : "Mode change failed.";
+      push(
+        "bad",
+        msg.includes("sandbox_server_post_required")
+          ? "Need a sandbox server post for this client first (see Go live)."
+          : msg,
+      );
     } finally {
       setModeBusy(null);
     }
@@ -77,15 +88,36 @@ export function PostingStatusSection() {
         ) : null}
         <div className="row">
           <button className="btn ghost" type="button" disabled={busy} onClick={() => void refresh()}>
-            {busy ? "Loading…" : "Refresh queue status"}
+            {busy ? "Loading…" : "Refresh status"}
+          </button>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => {
+              markLaptopBackupPulled();
+              push("good", "Marked laptop backup pull time.");
+            }}
+          >
+            Mark laptop backup pulled
+          </button>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() =>
+              void logoutApi().then(() => push("info", "Signed out of API on this computer."))
+            }
+          >
+            Sign out of API
           </button>
         </div>
         {error ? <Notice tone="bad">{error}</Notice> : null}
         {status ? (
           <div className="stack">
             <p style={{ margin: 0 }}>
-              Queue depth — pending {status.depth.pending}, sending {status.depth.sending}, posted{" "}
-              {status.depth.posted}, failed {status.depth.failed}, unknown {status.depth.unknown}
+              API {status.apiUp ? "up" : "DOWN"} · Postgres {status.postgresUp ? "up" : "DOWN"} ·
+              server backup age {ageHours(status.newestBackupAgeSec)} · queue pending{" "}
+              {status.depth.pending}, sending {status.depth.sending}, posted {status.depth.posted},
+              failed {status.depth.failed}, unknown {status.depth.unknown}
             </p>
             <p className="muted" style={{ margin: 0 }}>
               Oldest pending age:{" "}

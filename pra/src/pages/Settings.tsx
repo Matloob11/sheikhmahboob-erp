@@ -20,11 +20,13 @@ import { BackupSection } from "./settings/Backup";
 import { PostingStatusSection } from "./settings/PostingStatus";
 import { PracticeSection } from "./settings/Practice";
 import { SecuritySection } from "./settings/Security";
+import { StaffSection } from "./settings/StaffSection";
 
 const SECTIONS = [
   { href: "#practice", label: "Practice" },
   { href: "#security", label: "Security" },
   { href: "#backup", label: "Backup" },
+  { href: "#staff", label: "Staff" },
   { href: "#posting", label: "Posting" },
   { href: "#about", label: "About" },
 ] as const;
@@ -113,6 +115,7 @@ export function SettingsPage() {
       <PracticeSection />
       <SecuritySection />
       <BackupSection />
+      <StaffSection />
       <PostingStatusSection />
       <AboutSection />
 

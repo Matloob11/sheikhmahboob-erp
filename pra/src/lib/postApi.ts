@@ -26,6 +26,10 @@ export type PostJobPublic = {
 };
 
 export type OwnerPostStatus = {
+  apiUp: boolean;
+  postgresUp: boolean;
+  newestBackupAgeSec: number | null;
+  newestBackupAt: string | null;
   depth: Record<"pending" | "sending" | "posted" | "failed" | "unknown", number>;
   oldestPendingAgeSec: number | null;
   lastErrorByClient: Array<{
@@ -284,8 +288,8 @@ export async function setClientPostingMode(
     credentials: "omit",
     body: JSON.stringify({ postingMode }),
   });
+  const body = (await res.json().catch(() => ({}))) as { postingMode?: string; error?: string };
   if (res.status === 403) throw new Error("Owner only.");
-  if (!res.ok) throw new Error(`Mode change failed (HTTP ${res.status})`);
-  const body = (await res.json()) as { postingMode?: string };
+  if (!res.ok) throw new Error(body.error ?? `Mode change failed (HTTP ${res.status})`);
   return body.postingMode === "server" ? "server" : "browser";
 }

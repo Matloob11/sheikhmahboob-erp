@@ -487,6 +487,19 @@ export async function submitInvoice(
         : await postInvoice(client, payload);
     const next = applyPraResult(prepared, result, client);
     await persistInvoice(next);
+    if (
+      client.postingMode === "server" &&
+      client.environment === "sandbox" &&
+      next.status === "posted" &&
+      !client.goLiveSandboxServerOkAt
+    ) {
+      await db.clients.put({
+        ...client,
+        goLiveSandboxServerOkAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      notifyDb();
+    }
     try {
       await logEvent({
         kind:

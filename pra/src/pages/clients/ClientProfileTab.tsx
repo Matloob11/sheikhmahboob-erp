@@ -171,6 +171,11 @@ export function ClientProfileTab({
           <strong className="mono">{form.postingMode === "server" ? "server" : "browser"}</strong>
           {" — "}change under Settings → Posting (owner). Default is browser.
         </p>
+        {editing ? (
+          <p style={{ margin: "8px 0 0" }}>
+            <Link to={sectionPath(`/clients/${editing}/go-live`)}>Open go-live checklist</Link>
+          </p>
+        ) : null}
         <TokenField
           label="eIMS token"
           value={form.posToken}

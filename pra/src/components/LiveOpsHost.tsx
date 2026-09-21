@@ -67,16 +67,27 @@ export function LiveOpsHost({ children }: { children: ReactNode }) {
         const { applyPraResult, clearInvoiceInFlight } = await import("../domain/invoices");
         const result = await drainSyncQueue();
         const posts = await drainPostOutbox();
-        for (const item of posts.finished) {
-          const inv = await db.invoices.get(item.invoiceId);
-          const owner = clients.find((c) => c.id === item.clientId) ?? client;
-          if (inv && owner) {
-            await db.invoices.put(applyPraResult(inv, item.result, owner));
-            notifyDb();
-          } else if (inv) {
-            await clearInvoiceInFlight(inv);
+          for (const item of posts.finished) {
+            const inv = await db.invoices.get(item.invoiceId);
+            const owner = clients.find((c) => c.id === item.clientId) ?? client;
+            if (inv && owner) {
+              await db.invoices.put(applyPraResult(inv, item.result, owner));
+              if (
+                owner.environment === "sandbox" &&
+                item.result.ok &&
+                !owner.goLiveSandboxServerOkAt
+              ) {
+                await db.clients.put({
+                  ...owner,
+                  goLiveSandboxServerOkAt: Date.now(),
+                  updatedAt: Date.now(),
+                });
+              }
+              notifyDb();
+            } else if (inv) {
+              await clearInvoiceInFlight(inv);
+            }
           }
-        }
         if (posts.sent) {
           push("good", `Flushed ${posts.sent} queued server post${posts.sent === 1 ? "" : "s"}.`);
         }

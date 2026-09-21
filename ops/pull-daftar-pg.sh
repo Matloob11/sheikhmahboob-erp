@@ -51,3 +51,8 @@ echo "=== 4/4 remove staging on server ==="
 ssh_run "rm -rf '$REMOTE_DIR' && echo removed"
 
 echo "PULL_OK $LOCAL_DEST"
+# Desk health banner reads this via a manual "mark pulled" button; also stamp a local marker.
+MARKER="$ROOT/server-snapshot/daftar-pg/.last-pull"
+mkdir -p "$(dirname "$MARKER")"
+date -u +%Y-%m-%dT%H:%M:%SZ > "$MARKER"
+echo "LAST_PULL_MARKER $MARKER"
