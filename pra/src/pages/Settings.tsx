@@ -17,17 +17,28 @@ import {
 import { recordDeskActivity } from "../lib/idleLock";
 import { AboutSection } from "./settings/About";
 import { BackupSection } from "./settings/Backup";
+import { BusinessSection } from "./settings/BusinessSection";
 import { PostingStatusSection } from "./settings/PostingStatus";
 import { PracticeSection } from "./settings/Practice";
 import { SecuritySection } from "./settings/Security";
 import { StaffSection } from "./settings/StaffSection";
+import { apiRole, hasApiToken } from "../lib/apiSync";
+import { Link } from "react-router-dom";
+import { sectionPath } from "../domain/nav";
 
-const SECTIONS = [
+const OWNER_SECTIONS = [
   { href: "#practice", label: "Practice" },
   { href: "#security", label: "Security" },
   { href: "#backup", label: "Backup" },
   { href: "#staff", label: "Staff" },
+  { href: "#business", label: "Business" },
   { href: "#posting", label: "Posting" },
+  { href: "#about", label: "About" },
+] as const;
+
+const BUSINESS_SECTIONS = [
+  { href: "#security", label: "Security" },
+  { href: "#backup", label: "Backup" },
   { href: "#about", label: "About" },
 ] as const;
 
@@ -97,26 +108,40 @@ export function PracticeGate({ children }: { children: ReactNode }) {
 
 export function SettingsPage() {
   const { events } = useDesk();
+  const role = hasApiToken() ? apiRole() : null;
+  const isBusiness = role === "business";
+  const isOwner = role === "owner";
+  const sections = isBusiness ? BUSINESS_SECTIONS : OWNER_SECTIONS;
 
   return (
     <div className="stack settings-sections">
       <PageHeader
         title="Settings"
+        actions={
+          <Link className="btn ghost" to={sectionPath("/onboarding")}>
+            Connect to PRA
+          </Link>
+        }
       />
 
       <nav className="settings-jump" aria-label="Settings sections">
-        {SECTIONS.map((section) => (
+        {sections.map((section) => (
           <a key={section.href} className="btn ghost" href={section.href}>
             {section.label}
           </a>
         ))}
       </nav>
 
-      <PracticeSection />
+      {!isBusiness ? <PracticeSection /> : null}
       <SecuritySection />
       <BackupSection />
-      <StaffSection />
-      <PostingStatusSection />
+      {isOwner || !role ? (
+        <>
+          <StaffSection />
+          <BusinessSection />
+          <PostingStatusSection />
+        </>
+      ) : null}
       <AboutSection />
 
       <Panel title="Recent activity">

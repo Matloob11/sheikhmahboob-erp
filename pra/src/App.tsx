@@ -12,6 +12,7 @@ import { GoLivePage } from "./pages/GoLive";
 import { InvoiceEditorPage } from "./pages/InvoiceEditor";
 import { InvoicesPage } from "./pages/Invoices";
 import { ItemsPage } from "./pages/Items";
+import { OnboardingPage } from "./pages/Onboarding";
 import { PosSalePage } from "./pages/PosSale";
 import { PsidsPage } from "./pages/Psids";
 import { ReportsPage } from "./pages/Reports";
@@ -26,6 +27,7 @@ function deskChildRoutes(home: string) {
       <Route path="today" element={<TodayPage />} />
       <Route path="clients" element={<ClientsPage />} />
       <Route path="clients/:clientId/go-live" element={<GoLivePage />} />
+      <Route path="onboarding" element={<OnboardingPage />} />
       <Route path="buyers" element={<BuyersPage />} />
       <Route path="items" element={<ItemsPage />} />
       <Route path="invoices" element={<InvoicesPage />} />

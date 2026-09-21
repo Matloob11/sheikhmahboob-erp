@@ -5,6 +5,17 @@ ERPNext at https://sheikhmahboob.com/login is separate — do not mix them.
 
 ---
 
+## Add a business login (the business uses Daftar themselves)
+
+1. Settings → Backup → sign in as owner.
+2. Settings → Business → pick the client file, email, temporary password → **Create**.
+3. Give them https://sheikhmahboob.com/pra/ and **Connect PRA** (onboarding) + their login.
+4. They only see their own client on the API. They cannot change the POS token after it is set.
+
+Disable / reset password: same screen. Disable logs them out at once.
+
+---
+
 ## Add a staff user
 
 1. Open **Settings → Backup**. Sign in with the owner email/password (API).

@@ -6,6 +6,9 @@ import { PhoneLinks } from "../../components/PhoneLinks";
 import { TokenField } from "../../components/TokenField";
 import { type ClientDraft } from "../../domain/clients";
 import { sectionPath } from "../../domain/nav";
+import { apiRole } from "../../lib/apiSync";
+import { looksLikeSandboxDemo } from "../../components/GoLiveChecklist";
+import { PRA_SANDBOX_TOKEN } from "../../types";
 import {
   PERSON_TYPES,
   SECTORS,
@@ -49,6 +52,13 @@ export function ClientProfileTab({
   onChooseClient,
   onPrefillSandbox,
 }: ClientProfileTabProps) {
+  const role = apiRole();
+  const tokenLocked =
+    role === "business" &&
+    Boolean(form.posToken.trim()) &&
+    form.posToken.trim() !== PRA_SANDBOX_TOKEN &&
+    !looksLikeSandboxDemo({ posId: form.posId, posToken: form.posToken });
+
   return (
     <form className="stack" onSubmit={(event) => void onSave(event)}>
       {errors.length ? (
@@ -180,10 +190,17 @@ export function ClientProfileTab({
           label="eIMS token"
           value={form.posToken}
           onChange={(value) => {
+            if (tokenLocked) return;
             setDirty(true);
             set("posToken", value);
           }}
           placeholder="Bearer token from PRA IRIS"
+          hint={
+            tokenLocked
+              ? "Only the practice owner can change this token after it is set."
+              : undefined
+          }
+          readOnly={tokenLocked}
         />
       </div>
       <details className="more-fields">

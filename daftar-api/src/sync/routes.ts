@@ -136,14 +136,25 @@ export async function registerSyncRoutes(app: FastifyInstance): Promise<void> {
           skipClient.add(id);
           continue;
         }
+        const localToken = peekPosTokenPlain(
+          String(existing.rows[0].pos_token ?? ""),
+          env.tokenEncryptionKey,
+        );
+        let incomingToken = str(raw.posToken);
+        // Business may set an empty token once; cannot change it after it is set.
+        if (actor.role === "business" && localToken && incomingToken && incomingToken !== localToken) {
+          conflicts.push({ entity: "client", id, reason: "pos_token_locked" });
+          incomingToken = "";
+          (raw as Record<string, unknown>).posToken = "";
+        }
         const decision = mergeClient(
           {
-            posToken: peekPosTokenPlain(String(existing.rows[0].pos_token ?? ""), env.tokenEncryptionKey),
+            posToken: localToken,
             updatedAt: Number(existing.rows[0].updated_at),
             businessName: String(existing.rows[0].business_name ?? ""),
           },
           {
-            posToken: str(raw.posToken),
+            posToken: incomingToken,
             updatedAt: num(raw.updatedAt),
             businessName: str(raw.businessName),
           },

@@ -9,6 +9,7 @@ import { registerHealthRoutes } from "./health.js";
 import { registerAuthRoutes } from "./auth/routes.js";
 import { registerImportRoutes } from "./import/routes.js";
 import { registerStaffRoutes } from "./staff/routes.js";
+import { registerBusinessRoutes } from "./business/routes.js";
 import { registerSyncRoutes } from "./sync/routes.js";
 import { registerPostingRoutes } from "./posting/routes.js";
 import { startPostWorker, stopPostWorker } from "./posting/worker.js";
@@ -32,6 +33,7 @@ export async function buildApp(options?: { logger?: boolean; startWorker?: boole
   await registerAuthRoutes(app);
   await registerImportRoutes(app);
   await registerStaffRoutes(app);
+  await registerBusinessRoutes(app);
   await registerSyncRoutes(app);
   await registerPostingRoutes(app);
 

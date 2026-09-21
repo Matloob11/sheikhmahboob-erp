@@ -103,9 +103,9 @@ export async function loginForSync(email: string, password: string): Promise<str
   return body.token;
 }
 
-export function apiRole(): "owner" | "staff" | null {
+export function apiRole(): "owner" | "staff" | "business" | null {
   const r = localStorage.getItem("daftar.apiRole");
-  return r === "owner" || r === "staff" ? r : null;
+  return r === "owner" || r === "staff" || r === "business" ? r : null;
 }
 
 export async function logoutApi(): Promise<void> {

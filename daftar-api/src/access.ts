@@ -3,7 +3,7 @@ import type { AuthUser } from "./auth/session.js";
 
 type Queryable = Pool | PoolClient;
 
-/** Owner sees all clients; staff only assigned ones. */
+/** Owner sees all clients; staff/business only assigned ones (business = exactly one). */
 export async function assertClientAccess(
   client: Queryable,
   user: AuthUser,
@@ -26,5 +26,8 @@ export async function accessibleClientIds(
     `SELECT client_id FROM client_staff WHERE user_id = $1`,
     [user.id],
   );
-  return result.rows.map((r) => r.client_id);
+  const ids = result.rows.map((r) => r.client_id);
+  // Business login is scoped to one client file even if rows were mis-assigned.
+  if (user.role === "business") return ids.slice(0, 1);
+  return ids;
 }

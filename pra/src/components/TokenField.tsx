@@ -7,6 +7,7 @@ export function TokenField({
   placeholder,
   hint,
   autoComplete = "off",
+  readOnly = false,
 }: {
   label: string;
   value: string;
@@ -14,6 +15,7 @@ export function TokenField({
   placeholder?: string;
   hint?: string;
   autoComplete?: string;
+  readOnly?: boolean;
 }) {
   const [visible, setVisible] = useState(false);
   const labelId = useId();
@@ -28,6 +30,7 @@ export function TokenField({
           spellCheck={false}
           value={value}
           placeholder={placeholder}
+          readOnly={readOnly}
           aria-labelledby={labelId}
           onChange={(event) => onChange(event.target.value)}
         />

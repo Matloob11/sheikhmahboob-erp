@@ -201,8 +201,16 @@ export async function registerStaffRoutes(app: FastifyInstance): Promise<void> {
     const user = await requireAuth(request, reply);
     if (!user) return;
     if (user.role === "owner") {
-      const rows = await pool.query(`SELECT client_id, user_id, created_at FROM client_staff`);
+      const rows = await pool.query(
+        `SELECT cs.client_id, cs.user_id, cs.created_at
+         FROM client_staff cs
+         JOIN users u ON u.id = cs.user_id
+         WHERE u.role = 'staff'`,
+      );
       return { assignments: rows.rows };
+    }
+    if (user.role !== "staff") {
+      return reply.code(403).send({ error: "owner_only" });
     }
     const rows = await pool.query(
       `SELECT client_id, user_id, created_at FROM client_staff WHERE user_id = $1`,

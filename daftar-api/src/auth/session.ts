@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { pool } from "../db.js";
 import { env } from "../env.js";
 
-export type UserRole = "owner" | "staff";
+export type UserRole = "owner" | "staff" | "business";
 
 export interface AuthUser {
   id: string;

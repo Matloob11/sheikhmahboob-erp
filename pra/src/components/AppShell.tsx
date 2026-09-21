@@ -46,7 +46,10 @@ const MASTERS: NavItem[] = [
   { to: "/items", label: "Items" },
 ];
 
-const PRACTICE: NavItem[] = [{ to: "/settings", label: "Settings" }];
+const PRACTICE: NavItem[] = [
+  { to: "/onboarding", label: "Connect PRA" },
+  { to: "/settings", label: "Settings" },
+];
 
 const MORE_HREF = ["/clients", "/buyers", "/items", "/reports", "/pos", "/psid", "/settings"];
 

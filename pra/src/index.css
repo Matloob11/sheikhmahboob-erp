@@ -3370,3 +3370,10 @@ tr.is-open td {
   }
 }
 
+@media print {
+  .onboarding-print .page-actions,
+  .onboarding-print .btn {
+    display: none !important;
+  }
+}
+
