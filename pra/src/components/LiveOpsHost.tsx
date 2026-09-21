@@ -60,10 +60,42 @@ export function LiveOpsHost({ children }: { children: ReactNode }) {
       void listPostRetryCandidates(client.id).then((rows) => {
         if (rows.length) setCandidates(rows);
       });
+      void (async () => {
+        const { drainSyncQueue, readStoredConflicts } = await import("../lib/apiSync");
+        const result = await drainSyncQueue();
+        if (!result) return;
+        if (result.queued) {
+          push("info", "API still unreachable — sync stays queued. Desk keeps working offline.");
+          return;
+        }
+        if (result.conflicts.length || readStoredConflicts().length) {
+          push(
+            "bad",
+            `Sync finished with ${result.conflicts.length || readStoredConflicts().length} conflict(s). Open Settings → Backup.`,
+          );
+        } else {
+          push("good", `Synced — pushed ${result.applied}, pulled ${result.pulled}.`);
+        }
+      })();
     }
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
-  }, [client]);
+  }, [client, push]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      void (async () => {
+        const { drainSyncQueue, hasApiToken, isSyncDirty } = await import("../lib/apiSync");
+        if (!hasApiToken() || !isSyncDirty()) return;
+        const result = await drainSyncQueue();
+        if (result && !result.queued && result.conflicts.length) {
+          push("bad", `Sync conflicts: ${result.conflicts.length}. See Settings → Backup.`);
+        }
+      })();
+    }, 120_000);
+    return () => window.clearInterval(id);
+  }, [push]);
 
   async function enableDueNotify() {
     const permission = await requestDueNotifyPermission();

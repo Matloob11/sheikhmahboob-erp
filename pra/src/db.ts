@@ -81,6 +81,23 @@ export class DaftarDB extends Dexie {
 
 export const db = new DaftarDB();
 
+/** Mark API sync dirty when desk data changes (offline queue). */
+function armSyncDirtyHooks(): void {
+  const tables = [db.clients, db.invoices, db.buyers, db.items, db.purchases, db.returns, db.psids] as const;
+  for (const table of tables) {
+    table.hook("creating", () => {
+      void import("./lib/apiSync").then((m) => m.markSyncDirty());
+    });
+    table.hook("updating", () => {
+      void import("./lib/apiSync").then((m) => m.markSyncDirty());
+    });
+    table.hook("deleting", () => {
+      void import("./lib/apiSync").then((m) => m.markSyncDirty());
+    });
+  }
+}
+armSyncDirtyHooks();
+
 export async function seedPctCatalog(): Promise<void> {
   await db.transaction("rw", db.pctCodes, async () => {
     const existing = await db.pctCodes.toArray();

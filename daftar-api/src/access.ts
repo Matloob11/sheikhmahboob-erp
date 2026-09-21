@@ -9,10 +9,7 @@ export async function assertClientAccess(
   user: AuthUser,
   clientId: string,
 ): Promise<boolean> {
-  if (user.role === "owner") {
-    const row = await client.query(`SELECT 1 FROM clients WHERE id = $1`, [clientId]);
-    return (row.rowCount ?? 0) > 0;
-  }
+  if (user.role === "owner") return true;
   const row = await client.query(
     `SELECT 1 FROM client_staff WHERE client_id = $1 AND user_id = $2`,
     [clientId, user.id],

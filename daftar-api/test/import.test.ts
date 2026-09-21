@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { pool } from "../src/db.js";
 import { buildApp } from "../src/index.js";
 import { env } from "../src/env.js";
+import { decryptPosToken, isEncryptedPosToken } from "../src/crypto/posToken.js";
 
 async function wipeDesk(): Promise<void> {
   await pool.query(`DELETE FROM audit_events`);
@@ -132,7 +133,9 @@ describe("import", () => {
     expect(body.counts.invoices).toBe(1);
 
     const client = await pool.query(`SELECT business_name, pos_token FROM clients WHERE id = 'c1'`);
-    expect(client.rows[0]).toMatchObject({ business_name: "Ahmad Traders", pos_token: "token-alive" });
+    expect(client.rows[0].business_name).toBe("Ahmad Traders");
+    expect(isEncryptedPosToken(String(client.rows[0].pos_token))).toBe(true);
+    expect(decryptPosToken(String(client.rows[0].pos_token), env.tokenEncryptionKey)).toBe("token-alive");
     const inv = await pool.query(`SELECT period, usin FROM invoices WHERE id = 'inv1'`);
     expect(inv.rows[0]).toMatchObject({ period: "2026-03", usin: "USIN-1" });
   });
@@ -207,7 +210,8 @@ describe("import", () => {
 
     const client = await pool.query(`SELECT business_name, pos_token FROM clients WHERE id = 'c1'`);
     expect(client.rows[0].business_name).toBe("Ahmad Traders Updated");
-    expect(client.rows[0].pos_token).toBe("token-alive");
+    expect(isEncryptedPosToken(String(client.rows[0].pos_token))).toBe(true);
+    expect(decryptPosToken(String(client.rows[0].pos_token), env.tokenEncryptionKey)).toBe("token-alive");
 
     const inv = await pool.query(`SELECT buyer_name, status FROM invoices WHERE id = 'inv1'`);
     expect(inv.rows[0]).toMatchObject({ buyer_name: "Buyer 2", status: "validated" });

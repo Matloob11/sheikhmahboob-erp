@@ -39,6 +39,10 @@ async function main(): Promise<void> {
     }
   }
 
+  const { reencryptPlainPosTokens } = await import("./reencryptTokens.js");
+  const sealed = await reencryptPlainPosTokens();
+  console.log(`reencrypted_pos_tokens=${sealed}`);
+
   await pool.end();
   console.log("MIGRATE_OK");
 }

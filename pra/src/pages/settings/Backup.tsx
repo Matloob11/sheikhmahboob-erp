@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Confirm } from "../../components/Confirm";
 import { Notice } from "../../components/Notice";
 import { Panel } from "../../components/Panel";
@@ -17,6 +17,13 @@ import {
   type DeskBackup,
   type ImportMode,
 } from "../../lib/backup";
+import {
+  clearStoredConflicts,
+  isSyncDirty,
+  readStoredConflicts,
+  syncQueueDepth,
+  type SyncConflict,
+} from "../../lib/apiSync";
 import type { DeskEvent } from "../../types";
 
 const API_URL_KEY = "daftar.apiBase";
@@ -61,7 +68,21 @@ export function BackupSection() {
   const [apiEmail, setApiEmail] = useState(() => localStorage.getItem(API_EMAIL_KEY) ?? "");
   const [apiPassword, setApiPassword] = useState("");
   const [pushBusy, setPushBusy] = useState(false);
+  const [conflicts, setConflicts] = useState<SyncConflict[]>(() => readStoredConflicts());
+  const [queueDepth, setQueueDepth] = useState(() => syncQueueDepth());
+  const [dirty, setDirty] = useState(() => isSyncDirty());
   const imported = lastImported(events);
+
+  useEffect(() => {
+    const tick = () => {
+      setConflicts(readStoredConflicts());
+      setQueueDepth(syncQueueDepth());
+      setDirty(isSyncDirty());
+    };
+    tick();
+    const id = window.setInterval(tick, 2000);
+    return () => window.clearInterval(id);
+  }, []);
 
   async function onExport() {
     try {
@@ -295,13 +316,18 @@ export function BackupSection() {
                   localStorage.setItem(API_EMAIL_KEY, apiEmail.trim());
                   const result = await syncPushWithLogin(apiEmail.trim(), apiPassword);
                   setApiPassword("");
-                  if (result.conflicts.length) {
+                  setConflicts(result.conflicts);
+                  setQueueDepth(syncQueueDepth());
+                  setDirty(isSyncDirty());
+                  if (result.queued) {
+                    push("info", "API unreachable — change queued. Desk stays usable offline.");
+                  } else if (result.conflicts.length) {
                     push(
                       "bad",
-                      `Synced with ${result.conflicts.length} conflict(s) — ${result.applied} row(s) applied. Check details before trusting the merge.`,
+                      `Synced with ${result.conflicts.length} conflict(s) — pushed ${result.applied}, pulled ${result.pulled}. Resolve below.`,
                     );
                   } else {
-                    push("good", `Synced — ${result.applied} row(s) applied.`);
+                    push("good", `Synced — pushed ${result.applied}, pulled ${result.pulled}.`);
                   }
                 } catch (error: unknown) {
                   push("bad", error instanceof Error ? error.message : "Sync failed.");
@@ -311,10 +337,43 @@ export function BackupSection() {
               })();
             }}
           >
-            Sync push (M2)
+            Sync now
           </button>
         </div>
       </div>
+
+      {(dirty || queueDepth > 0) && (
+        <Notice tone="info">
+          Sync queue: {queueDepth || 1} pending change{queueDepth === 1 ? "" : "s"}
+          {dirty ? " (dirty)" : ""}. Will drain when the API is online.
+        </Notice>
+      )}
+
+      {conflicts.length > 0 && (
+        <div className="stack" data-testid="sync-conflicts">
+          <Notice tone="bad">
+            {conflicts.length} sync conflict{conflicts.length === 1 ? "" : "s"} — not silently merged.
+            Newest-wins still applies where safe; posted invoices are never downgraded.
+          </Notice>
+          <ul className="plain-list mono" style={{ fontSize: "0.85rem" }}>
+            {conflicts.map((c) => (
+              <li key={`${c.entity}-${c.id}-${c.reason}`}>
+                {c.entity} <strong>{c.id}</strong>: {c.reason}
+              </li>
+            ))}
+          </ul>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => {
+              clearStoredConflicts();
+              setConflicts([]);
+            }}
+          >
+            Dismiss conflicts
+          </button>
+        </div>
+      )}
 
       <Confirm
         open={Boolean(pending)}

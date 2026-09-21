@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { env } from "../env.js";
+import { sealPosTokenForStore } from "../crypto/posToken.js";
 
 const invoiceLineSchema = z
   .object({
@@ -168,11 +170,11 @@ export async function importDeskBackup(
       `SELECT pos_token FROM clients WHERE id = $1`,
       [row.id],
     );
-    const incomingToken = row.posToken ?? "";
-    const keepToken =
-      incomingToken === "" && existing.rows[0]?.pos_token
-        ? existing.rows[0].pos_token
-        : incomingToken;
+    const sealedToken = sealPosTokenForStore(
+      row.posToken ?? "",
+      existing.rows[0]?.pos_token,
+      env.tokenEncryptionKey,
+    );
 
     await client.query(
       `INSERT INTO clients (
@@ -222,7 +224,7 @@ export async function importDeskBackup(
         row.sector,
         row.branchName,
         row.posId,
-        keepToken,
+        sealedToken,
         row.environment,
         row.notes,
         row.ntn ?? "",

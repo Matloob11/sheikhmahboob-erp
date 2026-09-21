@@ -86,6 +86,7 @@ ENV=/etc/daftar-api.env
 if [[ ! -f "$ENV" ]]; then
   PG_PASS=$(openssl rand -hex 24)
   OWNER_PASS=$(openssl rand -hex 16)
+  KEY=$(openssl rand -hex 32)
   umask 077
   cat > "$ENV" <<EOF
 HOST=127.0.0.1
@@ -100,6 +101,7 @@ LOGIN_MAX_FAILURES=5
 LOGIN_LOCK_MINUTES=15
 DAFTAR_PG_PASSWORD=${PG_PASS}
 NODE_ENV=production
+TOKEN_ENCRYPTION_KEY=${KEY}
 EOF
   chmod 600 "$ENV"
   chown root:root "$ENV"
@@ -108,6 +110,16 @@ EOF
   echo CREATED_ENV
 else
   echo ENV_EXISTS
+fi
+# M2: ensure TOKEN_ENCRYPTION_KEY exists (root-only .env). Never print the value.
+if ! grep -q '^TOKEN_ENCRYPTION_KEY=' "$ENV" 2>/dev/null; then
+  KEY=$(openssl rand -hex 32)
+  umask 077
+  printf '\nTOKEN_ENCRYPTION_KEY=%s\n' "$KEY" >> "$ENV"
+  chmod 600 "$ENV"
+  echo TOKEN_KEY_ADDED
+else
+  echo TOKEN_KEY_EXISTS
 fi
 REMOTE
 
@@ -160,7 +172,11 @@ cd /opt/daftar-api
 sudo -u daftar npm ci --omit=dev
 
 # migrate (compiled)
-sudo -u daftar -E env DATABASE_URL="$DATABASE_URL" node dist/src/migrate.js
+sudo -u daftar env \
+  DATABASE_URL="$DATABASE_URL" \
+  TOKEN_ENCRYPTION_KEY="$TOKEN_ENCRYPTION_KEY" \
+  NODE_ENV="${NODE_ENV:-production}" \
+  node dist/src/migrate.js
 
 install -m 0644 /tmp/daftar-api.service /etc/systemd/system/daftar-api.service
 rm -f /tmp/daftar-api.service
@@ -213,7 +229,11 @@ fi
 EMAIL=$(awk -F= '/^email=/{print $2}' /root/daftar-owner.credentials)
 PASS=$(awk -F= '/^password=/{print $2}' /root/daftar-owner.credentials)
 cd /opt/daftar-api
-sudo -u daftar -E env DATABASE_URL="$DATABASE_URL" node dist/scripts/create-owner.js --email "$EMAIL" --password "$PASS"
+sudo -u daftar env \
+  DATABASE_URL="$DATABASE_URL" \
+  TOKEN_ENCRYPTION_KEY="$TOKEN_ENCRYPTION_KEY" \
+  NODE_ENV="${NODE_ENV:-production}" \
+  node dist/scripts/create-owner.js --email "$EMAIL" --password "$PASS"
 echo "OWNER_OK $EMAIL"
 REMOTE
 

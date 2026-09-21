@@ -5,7 +5,10 @@ import { requireAuth } from "../auth/routes.js";
 import { writeAudit } from "../audit.js";
 import { accessibleClientIds, assertClientAccess } from "../access.js";
 import { mergeClient, mergeInvoice } from "./merge.js";
+import { mapRows } from "./mapRow.js";
 import { deskBackupSchema, importDeskBackup } from "../import/deskBackup.js";
+import { env } from "../env.js";
+import { peekPosTokenPlain } from "../crypto/posToken.js";
 
 const pullSchema = z.object({
   sinceMs: z.coerce.number().int().nonnegative().default(0),
@@ -95,13 +98,13 @@ export async function registerSyncRoutes(app: FastifyInstance): Promise<void> {
     return {
       sinceMs: since,
       serverTimeMs: Date.now(),
-      clients: clients.rows,
-      invoices: invoices.rows,
-      buyers: buyers.rows,
-      items: items.rows,
-      purchases: purchases.rows,
-      returns: returns.rows,
-      psids: psids.rows,
+      clients: mapRows(clients.rows as Record<string, unknown>[]),
+      invoices: mapRows(invoices.rows as Record<string, unknown>[]),
+      buyers: mapRows(buyers.rows as Record<string, unknown>[]),
+      items: mapRows(items.rows as Record<string, unknown>[]),
+      purchases: mapRows(purchases.rows as Record<string, unknown>[]),
+      returns: mapRows(returns.rows as Record<string, unknown>[]),
+      psids: mapRows(psids.rows as Record<string, unknown>[]),
     };
   });
 
@@ -134,7 +137,7 @@ export async function registerSyncRoutes(app: FastifyInstance): Promise<void> {
         }
         const decision = mergeClient(
           {
-            posToken: String(existing.rows[0].pos_token ?? ""),
+            posToken: peekPosTokenPlain(String(existing.rows[0].pos_token ?? ""), env.tokenEncryptionKey),
             updatedAt: Number(existing.rows[0].updated_at),
             businessName: String(existing.rows[0].business_name ?? ""),
           },

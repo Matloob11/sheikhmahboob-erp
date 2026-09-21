@@ -1,13 +1,24 @@
 /**
- * M2 desk ↔ API sync (Bearer). Newest-wins rules live on the server;
- * conflicts are returned for the UI to surface.
+ * M2 desk ↔ API sync (Bearer). Newest-wins on server; conflicts surface in UI.
+ * Offline: mark dirty + queue; drain when online.
  */
 import { db } from "../db";
+import { applyPullPayload, type SyncConflict } from "./applyPull";
 import type { DeskBackup } from "./backup";
 
 const API_URL_KEY = "daftar.apiBase";
 const API_TOKEN_KEY = "daftar.apiToken";
 const SYNC_SINCE_KEY = "daftar.syncSinceMs";
+const SYNC_DIRTY_KEY = "daftar.syncDirty";
+const SYNC_CONFLICTS_KEY = "daftar.syncConflicts";
+const SYNC_QUEUE_KEY = "daftar.syncQueue";
+
+export type SyncResult = {
+  applied: number;
+  pulled: number;
+  conflicts: SyncConflict[];
+  queued?: boolean;
+};
 
 export function apiBase(): string {
   const stored = localStorage.getItem(API_URL_KEY);
@@ -16,6 +27,65 @@ export function apiBase(): string {
     return "https://sheikhmahboob.com/pra-api/v1";
   }
   return "http://127.0.0.1:8787/v1";
+}
+
+export function hasApiToken(): boolean {
+  return Boolean(localStorage.getItem(API_TOKEN_KEY));
+}
+
+export function markSyncDirty(): void {
+  localStorage.setItem(SYNC_DIRTY_KEY, "1");
+  const queue = readQueue();
+  queue.push({ at: Date.now(), reason: "dirty" });
+  // Cap queue markers — full Dexie push is the payload, not each event.
+  localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue.slice(-50)));
+}
+
+export function isSyncDirty(): boolean {
+  return localStorage.getItem(SYNC_DIRTY_KEY) === "1";
+}
+
+export function syncQueueDepth(): number {
+  return readQueue().length;
+}
+
+function readQueue(): Array<{ at: number; reason: string }> {
+  try {
+    const raw = localStorage.getItem(SYNC_QUEUE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Array<{ at: number; reason: string }>;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function clearQueue(): void {
+  localStorage.removeItem(SYNC_DIRTY_KEY);
+  localStorage.removeItem(SYNC_QUEUE_KEY);
+}
+
+export function readStoredConflicts(): SyncConflict[] {
+  try {
+    const raw = localStorage.getItem(SYNC_CONFLICTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as SyncConflict[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function storeConflicts(conflicts: SyncConflict[]): void {
+  if (!conflicts.length) {
+    localStorage.removeItem(SYNC_CONFLICTS_KEY);
+    return;
+  }
+  localStorage.setItem(SYNC_CONFLICTS_KEY, JSON.stringify(conflicts.slice(0, 40)));
+}
+
+export function clearStoredConflicts(): void {
+  localStorage.removeItem(SYNC_CONFLICTS_KEY);
 }
 
 export async function loginForSync(email: string, password: string): Promise<string> {
@@ -38,12 +108,8 @@ function tokenOrThrow(): string {
   return t;
 }
 
-export async function pushDeskNow(): Promise<{
-  applied: number;
-  conflicts: Array<{ entity: string; id: string; reason: string }>;
-}> {
-  const token = tokenOrThrow();
-  const payload = {
+async function deskPayload() {
+  return {
     clients: await db.clients.toArray(),
     invoices: await db.invoices.toArray(),
     purchases: await db.purchases.toArray(),
@@ -52,6 +118,14 @@ export async function pushDeskNow(): Promise<{
     buyers: await db.buyers.toArray(),
     items: await db.items.toArray(),
   };
+}
+
+export async function pushDeskNow(): Promise<{
+  applied: number;
+  conflicts: SyncConflict[];
+}> {
+  const token = tokenOrThrow();
+  const payload = await deskPayload();
   const res = await fetch(`${apiBase()}/sync/push`, {
     method: "POST",
     headers: {
@@ -64,11 +138,11 @@ export async function pushDeskNow(): Promise<{
   if (!res.ok) throw new Error((await res.text()) || "Sync push failed.");
   return (await res.json()) as {
     applied: number;
-    conflicts: Array<{ entity: string; id: string; reason: string }>;
+    conflicts: SyncConflict[];
   };
 }
 
-export async function pullDeskNow(): Promise<{ pulled: number }> {
+export async function pullDeskNow(): Promise<{ pulled: number; conflicts: SyncConflict[] }> {
   const token = tokenOrThrow();
   const since = Number(localStorage.getItem(SYNC_SINCE_KEY) || "0");
   const res = await fetch(`${apiBase()}/sync/pull?sinceMs=${since}`, {
@@ -86,29 +160,44 @@ export async function pullDeskNow(): Promise<{ pulled: number }> {
     returns: Array<Record<string, unknown>>;
     psids: Array<Record<string, unknown>>;
   };
-  // Server returns snake_case columns; map minimally via full backup import path later.
-  // For M2 first cut: store raw into Dexie only when camelCase shape is present (from push round-trip).
-  // Prefer: treat pull as server truth for ids present — apply through prepareImport-style later.
-  void body;
+  const applied = await applyPullPayload(body);
   localStorage.setItem(SYNC_SINCE_KEY, String(body.serverTimeMs));
-  const pulled =
-    body.clients.length +
-    body.invoices.length +
-    body.buyers.length +
-    body.items.length +
-    body.purchases.length +
-    body.returns.length +
-    body.psids.length;
-  return { pulled };
+  return applied;
 }
 
-/** One-shot: login + push (keeps offline Dexie primary; server gets a copy that merges). */
+/** Push then pull. On network failure, queue and keep desk usable. */
+export async function syncNow(): Promise<SyncResult> {
+  try {
+    const push = await pushDeskNow();
+    const pull = await pullDeskNow();
+    const conflicts = [...push.conflicts, ...pull.conflicts];
+    storeConflicts(conflicts);
+    clearQueue();
+    return { applied: push.applied, pulled: pull.pulled, conflicts };
+  } catch (error) {
+    markSyncDirty();
+    const message = error instanceof Error ? error.message : "Sync failed";
+    if (/Failed to fetch|NetworkError|Load failed|sync push failed|sync pull failed/i.test(message) || !navigator.onLine) {
+      return { applied: 0, pulled: 0, conflicts: readStoredConflicts(), queued: true };
+    }
+    throw error;
+  }
+}
+
+/** Drain dirty queue when online. No-op without token. */
+export async function drainSyncQueue(): Promise<SyncResult | null> {
+  if (!hasApiToken()) return null;
+  if (!isSyncDirty() && syncQueueDepth() === 0) return null;
+  if (typeof navigator !== "undefined" && !navigator.onLine) return null;
+  return syncNow();
+}
+
 export async function syncPushWithLogin(
   email: string,
   password: string,
-): Promise<{ applied: number; conflicts: Array<{ entity: string; id: string; reason: string }> }> {
+): Promise<SyncResult> {
   await loginForSync(email, password);
-  return pushDeskNow();
+  return syncNow();
 }
 
-export type { DeskBackup };
+export type { DeskBackup, SyncConflict };

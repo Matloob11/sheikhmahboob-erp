@@ -33,5 +33,10 @@ export const env = {
   bodyLimitBytes: Number(process.env.BODY_LIMIT_BYTES ?? String(32 * 1024 * 1024)),
   loginMaxFailures: Number(process.env.LOGIN_MAX_FAILURES ?? "5"),
   loginLockMinutes: Number(process.env.LOGIN_LOCK_MINUTES ?? "15"),
+  /** 32-byte hex (64 chars) preferred. Required in production; local falls back to a fixed test key. */
+  tokenEncryptionKey: required(
+    "TOKEN_ENCRYPTION_KEY",
+    process.env.NODE_ENV === "production" ? undefined : "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  ),
   root,
 };
