@@ -4,6 +4,7 @@ import { Confirm } from "./Confirm";
 import { useDesk } from "../context/DeskContext";
 import { useNotice } from "../context/NoticeContext";
 import { db } from "../db";
+import { notifyDb } from "../hooks/useLive";
 import { listPostRetryCandidates, submitInvoice } from "../domain/invoices";
 import { peekTrash, restoreTrash } from "../domain/trash";
 import { schemaUpgradeNotice } from "../lib/schemaNotice";
@@ -62,7 +63,23 @@ export function LiveOpsHost({ children }: { children: ReactNode }) {
       });
       void (async () => {
         const { drainSyncQueue, readStoredConflicts } = await import("../lib/apiSync");
+        const { drainPostOutbox } = await import("../lib/postApi");
+        const { applyPraResult, clearInvoiceInFlight } = await import("../domain/invoices");
         const result = await drainSyncQueue();
+        const posts = await drainPostOutbox();
+        for (const item of posts.finished) {
+          const inv = await db.invoices.get(item.invoiceId);
+          const owner = clients.find((c) => c.id === item.clientId) ?? client;
+          if (inv && owner) {
+            await db.invoices.put(applyPraResult(inv, item.result, owner));
+            notifyDb();
+          } else if (inv) {
+            await clearInvoiceInFlight(inv);
+          }
+        }
+        if (posts.sent) {
+          push("good", `Flushed ${posts.sent} queued server post${posts.sent === 1 ? "" : "s"}.`);
+        }
         if (!result) return;
         if (result.queued) {
           push("info", "API still unreachable — sync stays queued. Desk keeps working offline.");
@@ -80,13 +97,26 @@ export function LiveOpsHost({ children }: { children: ReactNode }) {
     }
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
-  }, [client, push]);
+  }, [client, clients, push]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
       if (typeof navigator !== "undefined" && !navigator.onLine) return;
       void (async () => {
         const { drainSyncQueue, hasApiToken, isSyncDirty } = await import("../lib/apiSync");
+        const { drainPostOutbox, postOutboxDepth } = await import("../lib/postApi");
+        const { applyPraResult } = await import("../domain/invoices");
+        if (hasApiToken() && postOutboxDepth() > 0) {
+          const posts = await drainPostOutbox();
+          for (const item of posts.finished) {
+            const inv = await db.invoices.get(item.invoiceId);
+            const owner = clients.find((c) => c.id === item.clientId);
+            if (inv && owner) {
+              await db.invoices.put(applyPraResult(inv, item.result, owner));
+              notifyDb();
+            }
+          }
+        }
         if (!hasApiToken() || !isSyncDirty()) return;
         const result = await drainSyncQueue();
         if (result && !result.queued && result.conflicts.length) {
@@ -95,7 +125,7 @@ export function LiveOpsHost({ children }: { children: ReactNode }) {
       })();
     }, 120_000);
     return () => window.clearInterval(id);
-  }, [push]);
+  }, [clients, push]);
 
   async function enableDueNotify() {
     const permission = await requestDueNotifyPermission();

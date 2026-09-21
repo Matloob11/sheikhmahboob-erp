@@ -41,6 +41,7 @@ export function mergeClientForPull(
     posId: str(remote.posId),
     posToken: local?.posToken ?? "",
     environment: (str(remote.environment) || "sandbox") as Client["environment"],
+    postingMode: str(remote.postingMode) === "server" ? "server" : "browser",
     notes: str(remote.notes),
     ntn: remote.ntn != null ? str(remote.ntn) : local?.ntn,
     personName: remote.personName != null ? str(remote.personName) : local?.personName,

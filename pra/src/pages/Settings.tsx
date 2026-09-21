@@ -17,6 +17,7 @@ import {
 import { recordDeskActivity } from "../lib/idleLock";
 import { AboutSection } from "./settings/About";
 import { BackupSection } from "./settings/Backup";
+import { PostingStatusSection } from "./settings/PostingStatus";
 import { PracticeSection } from "./settings/Practice";
 import { SecuritySection } from "./settings/Security";
 
@@ -24,6 +25,7 @@ const SECTIONS = [
   { href: "#practice", label: "Practice" },
   { href: "#security", label: "Security" },
   { href: "#backup", label: "Backup" },
+  { href: "#posting", label: "Posting" },
   { href: "#about", label: "About" },
 ] as const;
 
@@ -111,6 +113,7 @@ export function SettingsPage() {
       <PracticeSection />
       <SecuritySection />
       <BackupSection />
+      <PostingStatusSection />
       <AboutSection />
 
       <Panel title="Recent activity">

@@ -376,7 +376,12 @@ export function AppShell() {
           ) : null}
         </div>
         {client ? (
-          <span className={live ? "env-chip live" : "env-chip"}>{client.environment}</span>
+          <>
+            <span className={live ? "env-chip live" : "env-chip"}>{client.environment}</span>
+            <span className="env-chip">
+              {client.postingMode === "server" ? "server post" : "browser post"}
+            </span>
+          </>
         ) : setupOnly ? null : (
           <span className="env-chip">No file</span>
         )}

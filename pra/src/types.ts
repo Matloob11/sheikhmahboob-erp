@@ -69,6 +69,8 @@ export interface Client {
   posId: string;
   posToken: string;
   environment: Environment;
+  /** browser = desk posts via /pra-ims; server = desk enqueues to /pra-api. Default browser. */
+  postingMode?: "browser" | "server";
   notes: string;
   ntn?: string;
   personName?: string;

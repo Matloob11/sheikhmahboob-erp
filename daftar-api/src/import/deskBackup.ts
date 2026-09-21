@@ -34,6 +34,7 @@ const clientSchema = z
     posId: z.string().optional().default(""),
     posToken: z.string().optional().default(""),
     environment: z.string().optional().default("sandbox"),
+    postingMode: z.enum(["browser", "server"]).optional().default("browser"),
     notes: z.string().optional().default(""),
     ntn: z.string().optional(),
     personName: z.string().optional(),
@@ -179,11 +180,11 @@ export async function importDeskBackup(
     await client.query(
       `INSERT INTO clients (
         id, business_name, brand_name, pntn, cnic, phone, email, address, city, sector,
-        branch_name, pos_id, pos_token, environment, notes, ntn, person_name, person_type,
+        branch_name, pos_id, pos_token, environment, posting_mode, notes, ntn, person_name, person_type,
         business_id, branch_id, st_status, registered_on, archived, cnic_as_registration,
         created_at, updated_at
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27
       )
       ON CONFLICT (id) DO UPDATE SET
         business_name = EXCLUDED.business_name,
@@ -199,6 +200,7 @@ export async function importDeskBackup(
         pos_id = EXCLUDED.pos_id,
         pos_token = EXCLUDED.pos_token,
         environment = EXCLUDED.environment,
+        posting_mode = EXCLUDED.posting_mode,
         notes = EXCLUDED.notes,
         ntn = EXCLUDED.ntn,
         person_name = EXCLUDED.person_name,
@@ -226,6 +228,7 @@ export async function importDeskBackup(
         row.posId,
         sealedToken,
         row.environment,
+        row.postingMode ?? "browser",
         row.notes,
         row.ntn ?? "",
         row.personName ?? "",

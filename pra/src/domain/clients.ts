@@ -23,6 +23,7 @@ export const emptyClientDraft: ClientDraft = {
   posId: "",
   posToken: "",
   environment: "sandbox" as Environment,
+  postingMode: "browser",
   notes: "",
   ntn: "",
   personName: "",

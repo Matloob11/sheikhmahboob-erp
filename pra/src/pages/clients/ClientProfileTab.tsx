@@ -166,6 +166,11 @@ export function ClientProfileTab({
             <option value="production">Production</option>
           </SelectField>
         </div>
+        <p className="muted" style={{ margin: "8px 0 0" }}>
+          Posting mode:{" "}
+          <strong className="mono">{form.postingMode === "server" ? "server" : "browser"}</strong>
+          {" — "}change under Settings → Posting (owner). Default is browser.
+        </p>
         <TokenField
           label="eIMS token"
           value={form.posToken}

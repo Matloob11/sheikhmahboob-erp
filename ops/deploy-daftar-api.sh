@@ -181,7 +181,8 @@ sudo -u daftar env \
 install -m 0644 /tmp/daftar-api.service /etc/systemd/system/daftar-api.service
 rm -f /tmp/daftar-api.service
 systemctl daemon-reload
-systemctl enable --now daftar-api.service
+systemctl enable daftar-api.service
+systemctl restart daftar-api.service
 sleep 2
 systemctl --no-pager --full status daftar-api.service | head -20
 curl -sS -o /dev/null -w "health_local=%{http_code}\n" http://127.0.0.1:8787/v1/health

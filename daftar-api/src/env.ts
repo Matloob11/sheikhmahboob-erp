@@ -38,5 +38,10 @@ export const env = {
     "TOKEN_ENCRYPTION_KEY",
     process.env.NODE_ENV === "production" ? undefined : "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   ),
+  /** Optional override for tests / fake PRA. Empty = real PRA hosts. */
+  praPostUrlOverride: process.env.PRA_POST_URL_OVERRIDE ?? "",
+  praFetchMs: Number(process.env.PRA_FETCH_MS ?? "45000"),
+  praWorkerPollMs: Number(process.env.PRA_WORKER_POLL_MS ?? "2000"),
+  praClientGapMs: Number(process.env.PRA_CLIENT_GAP_MS ?? "1500"),
   root,
 };

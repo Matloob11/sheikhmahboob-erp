@@ -14,6 +14,7 @@ import {
   validateInvoice,
   type PraPostResult,
 } from "../lib/pra";
+import { OfflinePostQueuedError, submitViaServer } from "../lib/postApi";
 import {
   PRA_SANDBOX_TOKEN,
   type Buyer,
@@ -218,14 +219,22 @@ export type PosCheck = { tone: "bad" | "info"; title: string; body: string };
 
 export function posChecks(client: Client): PosCheck[] {
   const checks: PosCheck[] = [];
-  if (!client.posToken.trim()) {
+  const serverPosting = client.postingMode === "server";
+  if (serverPosting) {
+    checks.push({
+      tone: "info",
+      title: "Server posting",
+      body: "This file posts through the Daftar API. Switch back to browser mode in Settings → Posting if you need the old path.",
+    });
+  }
+  if (!client.posToken.trim() && !serverPosting) {
     checks.push({
       tone: "bad",
       title: "eIMS token missing",
       body: "Paste the token from PRA IRIS → eIMS / POS registration before posting.",
     });
   }
-  if (client.environment === "production" && !client.posToken.trim()) {
+  if (client.environment === "production" && !client.posToken.trim() && !serverPosting) {
     checks.push({
       tone: "bad",
       title: "Production file has no token",
@@ -464,7 +473,18 @@ export async function submitInvoice(
 
   try {
     const payload = buildPayload(client, prepared);
-    const result = await postInvoice(client, payload);
+    const result =
+      client.postingMode === "server"
+        ? await submitViaServer({
+            clientId: client.id,
+            invoiceId: prepared.id,
+            usin: prepared.usin,
+            environment: client.environment,
+            posId: client.posId,
+            payload,
+            confirmProduction: client.environment === "production" ? true : undefined,
+          })
+        : await postInvoice(client, payload);
     const next = applyPraResult(prepared, result, client);
     await persistInvoice(next);
     try {
@@ -501,6 +521,23 @@ export async function submitInvoice(
       inFlight: false,
     };
   } catch (error) {
+    if (error instanceof OfflinePostQueuedError) {
+      const waiting: Invoice = {
+        ...prepared,
+        inFlight: true,
+        inFlightAt: Date.now(),
+        lastError: error.message,
+        updatedAt: Date.now(),
+      };
+      await persistInvoice(waiting);
+      return {
+        invoice: waiting,
+        errors: [error.message],
+        alreadyPosted: false,
+        alreadyExists: false,
+        inFlight: true,
+      };
+    }
     const latest = prepared.id ? await db.invoices.get(prepared.id) : undefined;
     if (latest?.status === "posted") {
       return {

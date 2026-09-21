@@ -15,7 +15,7 @@ export function isEmail(value: string): boolean {
 
 export function validateClient(client: Pick<
   Client,
-  "businessName" | "pntn" | "cnic" | "email" | "posId" | "posToken" | "environment"
+  "businessName" | "pntn" | "cnic" | "email" | "posId" | "posToken" | "environment" | "postingMode"
 >): string[] {
   const errors: string[] = [];
   if (!client.businessName.trim()) errors.push("Business name is required.");
@@ -32,10 +32,11 @@ export function validateClient(client: Pick<
     errors.push("POS ID must be numeric.");
   }
   const token = client.posToken.trim();
+  const serverPosting = client.postingMode === "server";
   if (token.toLowerCase().startsWith("bearer ")) {
     errors.push("Paste the eIMS token only — the app adds the Bearer header.");
   }
-  if (client.environment === "production" && !token) {
+  if (client.environment === "production" && !token && !serverPosting) {
     errors.push("Production files need an eIMS token from PRA IRIS.");
   }
   if (client.environment === "production" && token && token === PRA_SANDBOX_TOKEN) {

@@ -87,4 +87,15 @@ describe("applyPull merge", () => {
     expect(conflict?.reason).toBe("local_newer");
     expect(row.businessName).toBe("Local");
   });
+
+  it("pulls postingMode from remote", () => {
+    const { row } = mergeClientForPull(baseClient(), {
+      id: "c1",
+      businessName: "Remote",
+      postingMode: "server",
+      updatedAt: 9,
+      createdAt: 1,
+    });
+    expect(row.postingMode).toBe("server");
+  });
 });

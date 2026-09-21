@@ -10,8 +10,10 @@ import { registerAuthRoutes } from "./auth/routes.js";
 import { registerImportRoutes } from "./import/routes.js";
 import { registerStaffRoutes } from "./staff/routes.js";
 import { registerSyncRoutes } from "./sync/routes.js";
+import { registerPostingRoutes } from "./posting/routes.js";
+import { startPostWorker, stopPostWorker } from "./posting/worker.js";
 
-export async function buildApp(options?: { logger?: boolean }) {
+export async function buildApp(options?: { logger?: boolean; startWorker?: boolean }) {
   const app = Fastify({
     logger: options?.logger ?? true,
     bodyLimit: env.bodyLimitBytes,
@@ -31,12 +33,22 @@ export async function buildApp(options?: { logger?: boolean }) {
   await registerImportRoutes(app);
   await registerStaffRoutes(app);
   await registerSyncRoutes(app);
+  await registerPostingRoutes(app);
+
+  app.addHook("onClose", async () => {
+    stopPostWorker();
+  });
+
+  if (options?.startWorker !== false) {
+    // Tests set startWorker: false and drain manually.
+  }
 
   return app;
 }
 
 async function main(): Promise<void> {
-  const app = await buildApp();
+  const app = await buildApp({ startWorker: true });
+  await startPostWorker();
   await app.listen({ host: env.host, port: env.port });
   console.log(`daftar-api listening on http://${env.host}:${env.port}/v1`);
 }

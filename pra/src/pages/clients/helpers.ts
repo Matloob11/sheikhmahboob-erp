@@ -21,6 +21,7 @@ export function draftFromClient(row: Client): ClientDraft {
     posId: row.posId,
     posToken: row.posToken,
     environment: row.environment,
+    postingMode: row.postingMode === "server" ? "server" : "browser",
     notes: row.notes,
     ntn: row.ntn ?? "",
     personName: row.personName ?? "",
