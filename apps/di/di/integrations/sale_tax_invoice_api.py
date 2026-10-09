@@ -27,7 +27,12 @@ from di.integrations.di_api import (
 	_make_request,
 	_round_currency,
 )
-from di.invoice_rules import fbr_product_description, petroleum_levy_on, settled_retail_price
+from di.invoice_rules import (
+	fbr_buyer_business_name,
+	fbr_product_description,
+	petroleum_levy_on,
+	settled_retail_price,
+)
 
 
 def post_sale_tax_invoice(doc, resync=False):
@@ -105,7 +110,7 @@ def build_sale_tax_invoice_payload(doc):
 		sellerProvince=cstr(doc.seller_province or ""),
 		sellerAddress=cstr(doc.seller_address or ""),
 		buyerNTNCNIC=cstr(doc.buyer_ntncnic or ""),
-		buyerBusinessName=cstr(doc.buyer or ""),
+		buyerBusinessName=fbr_buyer_business_name(doc.buyer, doc.seller__business_name),
 		buyerRegistrationType=cstr(doc.buyer_registration_type or ""),
 		buyerProvince=cstr(doc.buyer_province or ""),
 		buyerAddress=cstr(doc.buyer_address or ""),

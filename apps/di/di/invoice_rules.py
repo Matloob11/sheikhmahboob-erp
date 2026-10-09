@@ -77,10 +77,28 @@ def fbr_product_description(name: str = "", sale_type: str = "") -> str:
 	return text
 
 
+def fbr_buyer_business_name(name: str = "", seller: str = "") -> str:
+	"""Buyer names are unique across every seller, so a second company's record for
+	the same buyer is stored as 'Name (<seller>)' or 'Name (<seller>) 2'. FBR gets the
+	name without exactly that suffix; any other parenthetical ('X Traders (Regd)') stays.
+	"""
+	text = " ".join(str(name or "").split())
+	owner = " ".join(str(seller or "").split())
+	if not owner:
+		return text
+	marker = f" ({owner})"
+	index = text.rfind(marker)
+	if index > 0:
+		tail = text[index + len(marker) :]
+		if tail == "" or re.fullmatch(r" \d{1,2}", tail):
+			return text[:index].strip()
+	return text
+
+
 def extra_rupees_per_qty(rate_text) -> Decimal:
 	"""Compound FBR rates such as '18% along with rupees 60 per kilogram'.
 
-	Budget 2026–27 FED-in-ST goods use '18% and Rs. 80 per Liter'. 'Rs.2'
+	Budget 2026-27 FED-in-ST goods use '18% and Rs. 80 per Liter'. 'Rs.2'
 	is a flat rupee rate, not per-qty, so it stays 0.
 	"""
 	match = re.search(

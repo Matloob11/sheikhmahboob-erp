@@ -147,3 +147,19 @@ class TestInvoiceFormHasSroSelects(unittest.TestCase):
 		self.assertIn("rupees|rs", js)
 		self.assertIn("settled", js)
 		self.assertNotIn("flt(row.tax_rate_value) !== 18", js)
+
+
+class TestBuyerBusinessName(unittest.TestCase):
+	def test_only_the_sellers_own_suffix_is_stripped(self):
+		from di.invoice_rules import fbr_buyer_business_name
+
+		seller = "SUBHAN ENTERPRISES"
+		name = "University of Education"
+		self.assertEqual(fbr_buyer_business_name(f"{name} ({seller})", seller), name)
+		self.assertEqual(fbr_buyer_business_name(f"{name} ({seller}) 2", seller), name)
+		self.assertEqual(fbr_buyer_business_name(name, seller), name)
+		self.assertEqual(fbr_buyer_business_name("X Traders (Regd)", seller), "X Traders (Regd)")
+		self.assertEqual(fbr_buyer_business_name("X Traders (Regd)", ""), "X Traders (Regd)")
+		self.assertEqual(fbr_buyer_business_name("(SUBHAN ENTERPRISES)", seller), "(SUBHAN ENTERPRISES)")
+		self.assertEqual(fbr_buyer_business_name("", seller), "")
+
