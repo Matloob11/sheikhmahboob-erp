@@ -108,3 +108,41 @@ jobs:
           bench --site test_site run-tests --app di
         env:
           TYPE: server
+
+  site-less:
+    # Site-less runner used locally via ops/run-tests-wsl.sh. Kept alongside the
+    # bench job because REVIEW.md deliberately does not rely on bench run-tests.
+    runs-on: ubuntu-latest
+    name: Site-less suite
+    steps:
+      - name: Clone
+        uses: actions/checkout@v6
+
+      - name: Setup Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Clone Frappe version-16
+        run: git clone --depth 1 --branch version-16 https://github.com/frappe/frappe.git "$HOME/frappe"
+
+      - name: Install Frappe (skip mysqlclient) and run di/tests/run.py
+        run: |
+          python - <<'PY'
+          import tomllib
+          from pathlib import Path
+          deps = tomllib.load(open(Path.home() / "frappe" / "pyproject.toml", "rb"))["project"]["dependencies"]
+          Path("/tmp/frappe-req.txt").write_text(
+              "\n".join(d for d in deps if not d.lower().startswith("mysqlclient")) + "\n"
+          )
+          PY
+          pip install -r /tmp/frappe-req.txt
+          pip install --no-deps -e "$HOME/frappe"
+          mkdir -p "$HOME/di-bench/sites" "$HOME/di-bench/logs" "$HOME/di-bench/apps"
+          ln -sfn "$GITHUB_WORKSPACE" "$HOME/di-bench/apps/di"
+          ln -sfn "$HOME/frappe" "$HOME/di-bench/apps/frappe"
+          printf 'frappe\ndi\n' >"$HOME/di-bench/sites/apps.txt"
+          echo '{}' >"$HOME/di-bench/sites/common_site_config.json"
+          export PYTHONPATH="$GITHUB_WORKSPACE"
+          cd "$HOME/di-bench/sites"
+          python "$GITHUB_WORKSPACE/di/tests/run.py"
