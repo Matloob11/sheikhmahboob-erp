@@ -184,8 +184,12 @@ class SaleTaxInvoice(Document):
 			if not item:
 				continue
 
-			row.hs_code = item.hs_code
-			row.uom = item.product_uom
+			# fetch_if_empty on the item JSON is not enough alone: this sync
+			# used to overwrite every save, so a corrected UOM never stuck.
+			if not cstr(row.get("hs_code") or "").strip() and item.hs_code:
+				row.hs_code = item.hs_code
+			if not cstr(row.get("uom") or "").strip() and item.product_uom:
+				row.uom = item.product_uom
 			row.rate_in_percentage = item.tax_desc
 			row.tax_rate_value = item.rate_in_p
 			# FBR 0090 treats 0 as missing. Do not wipe a recipe/sale-rate value.
@@ -196,6 +200,9 @@ class SaleTaxInvoice(Document):
 			# it from the item but never override a row someone already set.
 			if not cstr(row.get("sale_type") or "").strip() and item.transaction_type:
 				row.sale_type = item.transaction_type
+			uom = cstr(row.get("uom") or "").strip()
+			if uom and not frappe.db.exists("HS Uom", uom):
+				frappe.throw(_("Row {0}: UOM {1} is not an HS Uom.").format(row.idx, uom))
 
 	def _ensure_third_schedule_prices(self):
 		for row in self.get("invoice_items") or []:

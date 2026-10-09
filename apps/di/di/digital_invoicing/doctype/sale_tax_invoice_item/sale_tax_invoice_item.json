@@ -42,10 +42,10 @@
   },
   {
    "fetch_from": "description.product_uom",
+   "fetch_if_empty": 1,
    "fieldname": "uom",
    "fieldtype": "Data",
    "label": "UOM",
-   "read_only": 1,
    "reqd": 1
   },
   {
@@ -54,10 +54,10 @@
   },
   {
    "fetch_from": "description.hs_code",
+   "fetch_if_empty": 1,
    "fieldname": "hs_code",
    "fieldtype": "Data",
    "label": "HS Code",
-   "read_only": 1,
    "reqd": 1
   },
   {
