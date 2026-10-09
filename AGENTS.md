@@ -22,8 +22,10 @@ Live desk is [`pra/`](pra/). Read [`pra/README.md`](pra/README.md) and [`pra/AGE
 
 ## SSH
 
-- Key: `C:\Users\Matloob\.ssh\hostinger_srv1992968` (WSL: `/mnt/c/Users/Matloob/.ssh/hostinger_srv1992968`)
+- Key (first): `C:\Users\Hp\.ssh\hostinger_187_53_143_235` (WSL: `/mnt/c/Users/Hp/.ssh/hostinger_187_53_143_235`, MSYS: `/c/Users/Hp/.ssh/hostinger_187_53_143_235`)
+- Fallback: `C:\Users\Matloob\.ssh\hostinger_srv1992968`
 - Helper: `./ssh.sh`
+- Site-less tests: `wsl -d Ubuntu -- bash ops/run-tests-wsl.sh`
 
 ## Safe default workflow
 

@@ -8,6 +8,13 @@ sites/*/site_config.json
 sites/*/private/
 sites/*/locks/
 
+*_tokens.pdf
+/*.pdf
+*.key
+.claude/
+.serena/
+.venv/
+
 # PRA reference clones (nested git repos). App code in pra-invoicing/apps/pra is kept.
 pra-invoicing/refs/
 
