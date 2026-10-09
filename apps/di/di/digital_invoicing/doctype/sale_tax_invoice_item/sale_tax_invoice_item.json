@@ -179,9 +179,10 @@
   },
   {
    "fieldname": "sale_type",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Sale Type",
-   "read_only": 1
+   "options": "Sale Type"
   },
   {
    "fieldname": "sro_item_serial_no",

@@ -9,6 +9,7 @@
   "amended_from",
   "invoice_details_section",
   "invoice_type",
+  "return_against",
   "invoice_date",
   "scenario_id",
   "fbr_environment",
@@ -58,8 +59,16 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Invoice Type",
-   "options": "Sale Invoice",
+   "options": "Sale Invoice\nDebit Note",
    "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.invoice_type==\"Debit Note\"",
+   "fieldname": "return_against",
+   "fieldtype": "Link",
+   "label": "Return Against",
+   "mandatory_depends_on": "eval:doc.invoice_type==\"Debit Note\"",
+   "options": "Sale Tax Invoice"
   },
   {
    "default": "Today",
@@ -69,12 +78,13 @@
    "reqd": 1
   },
   {
+   "depends_on": "eval:doc.fbr_environment==\"Sandbox\"",
    "fieldname": "scenario_id",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Scenario ID",
-   "options": "Scenario",
-   "reqd": 1
+   "mandatory_depends_on": "eval:doc.fbr_environment==\"Sandbox\"",
+   "options": "Scenario"
   },
   {
    "default": "Production",

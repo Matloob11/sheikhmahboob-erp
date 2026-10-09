@@ -13,7 +13,11 @@ frappe.ui.form.on("Sale Tax Invoice", {
 	},
 
 	scenario_id(frm) {
-		set_item_sale_type(frm);
+		// Production rows keep whatever sale type they already carry — only
+		// a Sandbox scenario forces every row to its one sale type.
+		if (frm.doc.fbr_environment === "Sandbox") {
+			set_item_sale_type(frm);
+		}
 	},
 
 	validate(frm) {
@@ -423,6 +427,23 @@ function add_fbr_buttons(frm) {
 							frm.reload_doc();
 						});
 				});
+			},
+			__("Digital Invoicing")
+		);
+	}
+
+	if (frm.doc.docstatus === 1 && frm.doc.fbr_invoice_no) {
+		frm.add_custom_button(
+			__("Create Debit Note"),
+			() => {
+				frappe
+					.xcall(
+						"di.digital_invoicing.doctype.sale_tax_invoice.sale_tax_invoice.make_debit_note",
+						{ name: frm.doc.name }
+					)
+					.then((new_name) => {
+						frappe.set_route("Form", "Sale Tax Invoice", new_name);
+					});
 			},
 			__("Digital Invoicing")
 		);

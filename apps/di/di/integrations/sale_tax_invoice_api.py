@@ -91,6 +91,12 @@ def build_sale_tax_invoice_payload(doc):
 	doc._ensure_third_schedule_prices()
 	doc._calculate_totals()
 
+	invoice_ref_no = ""
+	if cstr(doc.get("invoice_type") or "") == "Debit Note" and doc.get("return_against"):
+		invoice_ref_no = cstr(
+			frappe.db.get_value("Sale Tax Invoice", doc.return_against, "fbr_invoice_no") or ""
+		)
+
 	invoice = Invoice(
 		invoiceType=doc.invoice_type,
 		invoiceDate=_format_date(doc.invoice_date),
@@ -103,7 +109,7 @@ def build_sale_tax_invoice_payload(doc):
 		buyerRegistrationType=cstr(doc.buyer_registration_type or ""),
 		buyerProvince=cstr(doc.buyer_province or ""),
 		buyerAddress=cstr(doc.buyer_address or ""),
-		invoiceRefNo="",
+		invoiceRefNo=invoice_ref_no,
 		items=[_build_item_payload(row) for row in doc.get("invoice_items") or []],
 	)
 	payload = asdict(invoice)
