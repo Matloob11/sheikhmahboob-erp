@@ -35,6 +35,12 @@ def post_sale_tax_invoice(doc, resync=False):
 	if not resync and doc.get("fbr_invoice_no"):
 		return
 
+	from di.integrations.fbr_outcome import (
+		persist_post_exception,
+		persist_post_rejection,
+		persist_post_success,
+	)
+
 	payload = build_sale_tax_invoice_payload(doc)
 	url = _get_post_url(doc)
 	token = _get_seller_token(doc)
@@ -42,28 +48,23 @@ def post_sale_tax_invoice(doc, resync=False):
 	try:
 		response = _make_request(url, payload, token)
 	except Exception as e:
-		create_log(
-			doc.doctype,
-			doc.name,
-			payload,
-			str(e),
-			status="Error",
-			api_type="DI Post",
-			title=f"Sale Tax Invoice Post Error: {doc.name}",
-		)
+		persist_post_exception(doc, payload, e)
 		# Keep the error type: it says whether this may be sent again.
 		raise
 
 	invoice_number = cstr(response.get("invoiceNumber") or "").strip()
 	if not invoice_number:
-		_handle_standalone_error(doc, payload, response)
+		_error_code, error_msg = persist_post_rejection(doc, payload, response)
+		frappe.throw(_("Digital Invoicing Error:\n{0}").format(error_msg))
 
-	_apply_success(doc, payload, response, invoice_number, resync=resync)
+	persist_post_success(doc, payload, response, invoice_number, resync=resync)
 	return response
 
 
 def validate_sale_tax_invoice(doc):
 	"""Validate a standalone Sale Tax Invoice with FBR without posting."""
+	from di.integrations.fbr_outcome import persist_validate_outcome
+
 	payload = build_sale_tax_invoice_payload(doc)
 	url = _get_validate_url(doc)
 	token = _get_seller_token(doc)
@@ -71,26 +72,10 @@ def validate_sale_tax_invoice(doc):
 	try:
 		response = _make_request(url, payload, token)
 	except Exception as e:
-		create_log(
-			doc.doctype,
-			doc.name,
-			payload,
-			str(e),
-			status="Error",
-			api_type="DI Validate",
-			title=f"Sale Tax Invoice Validate Error: {doc.name}",
-		)
+		persist_validate_outcome(doc, payload, exc=e)
 		raise
 
-	create_log(
-		doc.doctype,
-		doc.name,
-		payload,
-		response,
-		status="Success" if _is_valid_response(response) else "Error",
-		api_type="DI Validate",
-		title=f"Sale Tax Invoice Validate: {doc.name}",
-	)
+	persist_validate_outcome(doc, payload, response=response)
 	return response
 
 
@@ -205,54 +190,16 @@ def _format_date(value):
 
 
 def _apply_success(doc, payload, response, invoice_number, resync=False):
-	dated = response.get("dated", now())
+	"""Compatibility wrapper for sandbox probes — always persists + commits."""
+	from di.integrations.fbr_outcome import persist_post_success
 
-	if resync:
-		doc.db_set("fbr_invoice_no", invoice_number, update_modified=False)
-		doc.db_set("qr_code_data", _generate_qr(invoice_number), update_modified=False)
-	else:
-		doc.fbr_invoice_no = invoice_number
-		doc.qr_code_data = _generate_qr(invoice_number)
-
-	create_log(
-		doc.doctype,
-		doc.name,
-		payload,
-		response,
-		status="Success",
-		api_type="DI Post",
-		title=f"Sale Tax Invoice Post Success: {doc.name}",
-		fbr_invoice_number=invoice_number,
-	)
-	return dated
+	return persist_post_success(doc, payload, response, invoice_number, resync=resync)
 
 
 def _handle_standalone_error(doc, payload, response):
-	from di.digital_invoicing.doctype.di_log.di_log import explain_error
+	from di.integrations.fbr_outcome import persist_post_rejection
 
-	error_parts = []
-	vr = response.get("validationResponse", {})
-
-	if vr.get("error"):
-		error_parts.append(explain_error(vr.get("errorCode"), vr["error"]))
-
-	for item_status in vr.get("invoiceStatuses") or []:
-		if item_status.get("status") != "Valid" and item_status.get("error"):
-			detail = explain_error(item_status.get("errorCode"), item_status["error"])
-			error_parts.append(f"Item {item_status.get('itemSNo', '?')}: {detail}")
-
-	error_msg = "\n".join(error_parts) if error_parts else str(response)
-	create_log(
-		doc.doctype,
-		doc.name,
-		payload,
-		response,
-		status="Error",
-		api_type="DI Post",
-		title=f"Sale Tax Invoice Post Error: {doc.name}",
-		error_code=vr.get("errorCode", ""),
-		error_message=error_msg,
-	)
+	_error_code, error_msg = persist_post_rejection(doc, payload, response)
 	frappe.throw(_("Digital Invoicing Error:\n{0}").format(error_msg))
 
 

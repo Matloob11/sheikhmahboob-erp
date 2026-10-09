@@ -71,6 +71,7 @@ class SaleTaxInvoice(Document):
 		self._ensure_third_schedule_prices()
 		self._calculate_totals()
 		self._set_qr_code_data()
+		self._refuse_changes_after_filing()
 
 	def before_submit(self):
 		self._enforce_production_for_panel()
@@ -267,3 +268,23 @@ class SaleTaxInvoice(Document):
 			self.qr_code_data = generate_qr_code(self.fbr_invoice_no) or ""
 		except Exception:
 			frappe.log_error(frappe.get_traceback(), _("Sale Tax Invoice QR Code Error"))
+
+	def _refuse_changes_after_filing(self):
+		"""Once FBR has a number, the payload is frozen until Submit or a Debit Note."""
+		number = cstr(self.get("fbr_invoice_no") or "").strip()
+		if not number or self.is_new():
+			return
+		stored_hash = cstr(self.get("fbr_payload_hash") or "").strip()
+		if not stored_hash:
+			return
+		from di.integrations.fbr_outcome import payload_hash
+		from di.integrations.sale_tax_invoice_api import build_sale_tax_invoice_payload
+
+		current = payload_hash(build_sale_tax_invoice_payload(self))
+		if current != stored_hash:
+			frappe.throw(
+				_(
+					"Already filed with FBR as {0}; this invoice cannot be changed. "
+					"Submit it as-is or create a Debit Note."
+				).format(number)
+			)

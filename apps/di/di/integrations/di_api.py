@@ -114,18 +114,16 @@ def post_invoice(doc, resync=False):
 	if settings.sync_mode == "Sandbox" and doc.get("di_scenario_id"):
 		payload["scenarioId"] = doc.di_scenario_id
 
+	from di.integrations.fbr_outcome import (
+		persist_post_exception,
+		persist_post_rejection,
+		persist_post_success,
+	)
+
 	try:
 		response = _make_request(url, payload, token, context=f"{doc.doctype} {doc.name}")
 	except Exception as e:
-		create_log(
-			doc.doctype,
-			doc.name,
-			payload,
-			str(e),
-			status="Error",
-			api_type="DI Post",
-			title=f"DI Post Error: {doc.doctype} {doc.name}",
-		)
+		persist_post_exception(doc, payload, e)
 		# Re-raise rather than collapsing into a generic throw. The type says
 		# whether this may be sent again, and the retry job depends on knowing:
 		# resending after a lost reply can file the same invoice with FBR twice.
@@ -133,13 +131,16 @@ def post_invoice(doc, resync=False):
 
 	invoice_number = response.get("invoiceNumber")
 	if invoice_number:
-		_handle_success(doc, payload, response, invoice_number, resync)
+		persist_post_success(doc, payload, response, invoice_number, resync=resync)
 	else:
-		_handle_error(doc, payload, response)
+		_error_code, error_msg = persist_post_rejection(doc, payload, response)
+		frappe.throw(_("Digital Invoicing Error:\n{0}").format(error_msg))
 
 
 def validate_invoice(doc):
 	"""Validate invoice with FBR without posting (validateinvoicedata)."""
+	from di.integrations.fbr_outcome import persist_validate_outcome
+
 	settings = _get_settings(doc.company)
 	if not settings:
 		frappe.throw(_("DI Settings not found for company {0}").format(doc.company))
@@ -154,26 +155,10 @@ def validate_invoice(doc):
 	try:
 		response = _make_request(url, payload, token, context=f"validate {doc.doctype} {doc.name}")
 	except Exception as e:
-		create_log(
-			doc.doctype,
-			doc.name,
-			payload,
-			str(e),
-			status="Error",
-			api_type="DI Validate",
-			title=f"DI Validate Error: {doc.doctype} {doc.name}",
-		)
+		persist_validate_outcome(doc, payload, exc=e)
 		raise
 
-	create_log(
-		doc.doctype,
-		doc.name,
-		payload,
-		response,
-		status="Success" if _is_valid_response(response) else "Error",
-		api_type="DI Validate",
-		title=f"DI Validate: {doc.doctype} {doc.name}",
-	)
+	persist_validate_outcome(doc, payload, response=response)
 	return response
 
 
@@ -256,56 +241,15 @@ def _is_valid_response(response):
 
 
 def _handle_success(doc, payload, response, invoice_number, resync):
-	dated = response.get("dated", now())
+	from di.integrations.fbr_outcome import persist_post_success
 
-	if resync:
-		doc.db_set("di_integration_id", invoice_number, update_modified=False)
-		doc.db_set("is_di_posted", 1, update_modified=False)
-		doc.db_set("di_posting_datetime", dated, update_modified=False)
-	else:
-		doc.di_integration_id = invoice_number
-		doc.is_di_posted = 1
-		doc.di_posting_datetime = dated
-
-	create_log(
-		doc.doctype,
-		doc.name,
-		payload,
-		response,
-		status="Success",
-		api_type="DI Post",
-		title=f"DI Post Success: {doc.doctype} {doc.name}",
-		fbr_invoice_number=invoice_number,
-	)
+	return persist_post_success(doc, payload, response, invoice_number, resync=resync)
 
 
 def _handle_error(doc, payload, response):
-	from di.digital_invoicing.doctype.di_log.di_log import explain_error
+	from di.integrations.fbr_outcome import persist_post_rejection
 
-	error_parts = []
-	vr = response.get("validationResponse", {})
-
-	if vr.get("error"):
-		error_parts.append(explain_error(vr.get("errorCode"), vr["error"]))
-
-	for item_status in vr.get("invoiceStatuses") or []:
-		if item_status.get("status") != "Valid" and item_status.get("error"):
-			detail = explain_error(item_status.get("errorCode"), item_status["error"])
-			error_parts.append(f"Item {item_status.get('itemSNo', '?')}: {detail}")
-
-	error_msg = "\n".join(error_parts) if error_parts else str(response)
-
-	create_log(
-		doc.doctype,
-		doc.name,
-		payload,
-		response,
-		status="Error",
-		api_type="DI Post",
-		title=f"DI Post Error: {doc.doctype} {doc.name}",
-		error_code=vr.get("errorCode", ""),
-		error_message=error_msg,
-	)
+	_error_code, error_msg = persist_post_rejection(doc, payload, response)
 	frappe.throw(_("Digital Invoicing Error:\n{0}").format(error_msg))
 
 

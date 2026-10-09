@@ -9,6 +9,7 @@ frappe.ui.form.on("Sale Tax Invoice", {
 		// hides Submit (Frappe only shows Submit on a clean draft).
 		calculate_invoice_totals(frm, { silent: true });
 		add_fbr_buttons(frm);
+		freeze_filed_draft(frm);
 	},
 
 	scenario_id(frm) {
@@ -72,6 +73,20 @@ function render_qr_code(frm) {
 	}
 
 	frm.fields_dict.qr_code.$wrapper.empty();
+}
+
+function freeze_filed_draft(frm) {
+	if (frm.doc.docstatus !== 0 || !frm.doc.fbr_invoice_no) {
+		return;
+	}
+	frm.set_read_only();
+	frm.set_intro(
+		__(
+			"Already filed with FBR as {0}. Only Submit is allowed — do not change lines. Open DI Log if you need the FBR response.",
+			[frm.doc.fbr_invoice_no]
+		),
+		"blue"
+	);
 }
 
 function calculate_invoice_item(frm, cdt, cdn) {

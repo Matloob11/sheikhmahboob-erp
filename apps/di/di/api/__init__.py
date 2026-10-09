@@ -39,7 +39,11 @@ def resync_invoice(doctype, name):
 			)
 		from di.integrations.sale_tax_invoice_api import post_sale_tax_invoice as _post
 
-		_post(doc, resync=False)
+		# resync=True is persistence (db_set), not an override — the FBR number
+		# was already confirmed blank above, so this cannot refile a numbered
+		# invoice; it only makes sure the new number is saved on this
+		# already-submitted doc instead of being set in memory and lost.
+		_post(doc, resync=True)
 	else:
 		if doc.get("di_integration_id") or doc.get("is_di_posted"):
 			frappe.throw(
@@ -47,7 +51,7 @@ def resync_invoice(doctype, name):
 					"Invoice {0} is already posted to FBR ({1}). Clear the DI integration id before re-filing."
 				).format(name, doc.get("di_integration_id") or _("posted"))
 			)
-		post_invoice(doc, resync=False)
+		post_invoice(doc, resync=True)
 	return {"success": True, "message": _("Invoice re-synced successfully")}
 
 
@@ -106,7 +110,11 @@ def post_sale_tax_invoice(name):
 				name, doc.fbr_invoice_no
 			)
 		)
-	_post(doc, resync=False)
+	# resync=True here is persistence, not permission: the duplicate-filing check
+	# just ran above, so this only tells _apply_success to db_set the number
+	# instead of setting it in memory — this doc is already submitted, there is
+	# no enclosing save() to carry an in-memory assignment to the database.
+	_post(doc, resync=True)
 	return {"success": True, "message": _("Sale Tax Invoice posted to FBR successfully")}
 
 
@@ -157,6 +165,8 @@ def clear_fbr_invoice_no(name, reason):
 
 	doc.db_set("fbr_invoice_no", "", update_modified=False)
 	doc.db_set("qr_code_data", "", update_modified=False)
+	if doc.meta.has_field("fbr_payload_hash"):
+		doc.db_set("fbr_payload_hash", "", update_modified=False)
 	from di.digital_invoicing.doctype.di_log.di_log import create_log
 
 	create_log(

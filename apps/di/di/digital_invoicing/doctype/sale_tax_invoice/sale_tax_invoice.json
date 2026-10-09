@@ -127,6 +127,15 @@
    "read_only": 1
   },
   {
+   "fieldname": "fbr_payload_hash",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "FBR Payload Hash",
+   "no_copy": 1,
+   "permlevel": 1,
+   "read_only": 1
+  },
+  {
    "fieldname": "buyer_details_section",
    "fieldtype": "Section Break",
    "label": "Buyer and Seller Info"
