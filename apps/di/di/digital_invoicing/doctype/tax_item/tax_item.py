@@ -28,7 +28,7 @@ class TaxItem(Document):
 	def validate(self):
 		from di.integrations.reference_api import _ensure_hs_uom
 
-		name = cstr(self.get("product_description") or self.name or "")
+		name = cstr(self.get("product_description") or getattr(self, "name", None) or "")
 		if "<" in name or ">" in name:
 			frappe.throw(_("Product description cannot contain < or >."))
 

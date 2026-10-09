@@ -129,10 +129,11 @@ def normalise_registration_type(result) -> str:
 		or result.get("Status")
 		or ""
 	).strip()
-	lower = raw.lower()
-	if "unreg" in lower:
+	# Collapse hyphens/spaces so "Un-Registered" still matches before "Registered".
+	compact = "".join(ch for ch in raw.lower() if ch.isalnum())
+	if "unreg" in compact:
 		return "Unregistered"
-	if "reg" in lower:
+	if "reg" in compact:
 		return "Registered"
 	return raw
 
