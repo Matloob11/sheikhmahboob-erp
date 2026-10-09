@@ -1,0 +1,179 @@
+{
+ "actions": [],
+ "creation": "2026-10-09 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "enabled",
+  "model",
+  "fallback_models",
+  "reasoning_effort",
+  "column_break_general",
+  "api_key",
+  "store_on_openai",
+  "default_environment",
+  "limits_section",
+  "max_tool_rounds",
+  "turn_budget_seconds",
+  "max_output_tokens",
+  "column_break_limits",
+  "daily_messages_per_user",
+  "allow_fbr_lookups",
+  "allow_fbr_validate",
+  "prompt_section",
+  "extra_instructions",
+  "status_section",
+  "status_html"
+ ],
+ "fields": [
+  {
+   "default": "0",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enable AI Assistant"
+  },
+  {
+   "default": "gpt-6-astra",
+   "description": "OpenAI model id. gpt-6-astra is the strongest and the dearest (about USD 10 per million input and 50 per million output tokens); gpt-6.1-sol is a fifth of that. Press Test connection to see which models this key can use.",
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Model",
+   "reqd": 1
+  },
+  {
+   "default": "gpt-6.1-sol\ngpt-6-sol\ngpt-5.6-sol\ngpt-5.6-terra\ngpt-5.5",
+   "description": "One per line. Tried in order when the key cannot use the model above.",
+   "fieldname": "fallback_models",
+   "fieldtype": "Small Text",
+   "label": "Fallback Models"
+  },
+  {
+   "default": "medium",
+   "description": "How long the model thinks before answering. high and xhigh are slower and cost more; low is fine for simple invoices.",
+   "fieldname": "reasoning_effort",
+   "fieldtype": "Select",
+   "label": "Reasoning Effort",
+   "options": "low\nmedium\nhigh\nxhigh"
+  },
+  {
+   "fieldname": "column_break_general",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Leave blank to use openai_api_key from site_config.json (recommended: bench --site sheikhmahboob.com set-config openai_api_key ...). Never paste the key anywhere else.",
+   "fieldname": "api_key",
+   "fieldtype": "Password",
+   "label": "OpenAI API Key (override)"
+  },
+  {
+   "default": "1",
+   "description": "Let OpenAI keep the conversation state (previous_response_id), which it retains for 30 days; tool results include buyer names and masked NTN/CNIC. Faster; untick for a zero-data-retention account (the assistant then replays its own history).",
+   "fieldname": "store_on_openai",
+   "fieldtype": "Check",
+   "label": "Store Conversation State on OpenAI"
+  },
+  {
+   "default": "Production",
+   "description": "Environment for drafts made by System Managers when they do not say Sandbox or Production. Client Panel users always get Production.",
+   "fieldname": "default_environment",
+   "fieldtype": "Select",
+   "label": "Default Environment for Drafts",
+   "options": "Sandbox\nProduction"
+  },
+  {
+   "fieldname": "limits_section",
+   "fieldtype": "Section Break",
+   "label": "Limits"
+  },
+  {
+   "default": "8",
+   "description": "Model-tools-model cycles allowed in one turn.",
+   "fieldname": "max_tool_rounds",
+   "fieldtype": "Int",
+   "label": "Max Tool Rounds per Turn"
+  },
+  {
+   "default": "75",
+   "description": "Wall-clock seconds for one turn (max 90). The desk request is cut at 120 seconds, so each model call only gets the time that is left.",
+   "fieldname": "turn_budget_seconds",
+   "fieldtype": "Int",
+   "label": "Turn Budget (seconds)"
+  },
+  {
+   "default": "8000",
+   "description": "Ceiling per model call, including the model's reasoning tokens. It is a limit, not a spend.",
+   "fieldname": "max_output_tokens",
+   "fieldtype": "Int",
+   "label": "Max Output Tokens per Call"
+  },
+  {
+   "fieldname": "column_break_limits",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "150",
+   "description": "Messages one user may send per day. 0 disables the cap.",
+   "fieldname": "daily_messages_per_user",
+   "fieldtype": "Int",
+   "label": "Daily Messages per User"
+  },
+  {
+   "default": "1",
+   "description": "UOM, rate and SRO lookups against FBR reference data, using the seller's own token.",
+   "fieldname": "allow_fbr_lookups",
+   "fieldtype": "Check",
+   "label": "Allow FBR Reference Lookups"
+  },
+  {
+   "default": "1",
+   "description": "Let the assistant run FBR validate on a draft when asked. It can never post.",
+   "fieldname": "allow_fbr_validate",
+   "fieldtype": "Check",
+   "label": "Allow FBR Validate"
+  },
+  {
+   "fieldname": "prompt_section",
+   "fieldtype": "Section Break",
+   "label": "House Rules"
+  },
+  {
+   "description": "Appended to the assistant's instructions. Example: \"Always use Production for SUBHAN ENTERPRISES.\"",
+   "fieldname": "extra_instructions",
+   "fieldtype": "Small Text",
+   "label": "Extra Instructions"
+  },
+  {
+   "fieldname": "status_section",
+   "fieldtype": "Section Break",
+   "label": "Status"
+  },
+  {
+   "fieldname": "status_html",
+   "fieldtype": "HTML",
+   "label": "Status"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-10-09 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Digital Invoicing",
+ "name": "DI AI Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
