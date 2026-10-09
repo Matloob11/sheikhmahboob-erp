@@ -190,7 +190,7 @@ function show_sandbox_draft_dialog(frm, data) {
 			{
 				fieldtype: "HTML",
 				options: `<p>${frappe.utils.escape_html(data.message)}</p>
-					<p class="text-muted">${__("Tick the scenarios you still need. Uncheck any already done in another system. Each selected invoice is posted to FBR and submitted here. Failed ones are discarded, not left as drafts.")}</p>
+					<p class="text-muted">${__("Tick the scenarios you still need. Uncheck any already done in another system. Each selected invoice is posted to FBR on its own request, so the page does not time out. Failed ones are discarded, not left as drafts.")}</p>
 					<div style="max-height:420px;overflow:auto;">
 						<table class="table table-sm">
 							<thead><tr>
@@ -215,35 +215,73 @@ function show_sandbox_draft_dialog(frm, data) {
 				return;
 			}
 			dialog.hide();
-			frappe.call({
-				method: "di.api.create_sandbox_scenario_drafts",
-				args: { company: frm.doc.company, scenario_ids: ids },
-				freeze: true,
-				freeze_message: __("Validating and submitting each scenario to FBR..."),
-				callback(r) {
-					let result = r.message || {};
-					let created = (result.created || [])
-						.map((row) => `${row.scenario_id}: ${row.name}${row.fbr_invoice_no ? " — " + row.fbr_invoice_no : ""}`)
-						.join("<br>");
-					let skipped = (result.skipped || [])
-						.map((row) => `${row.scenario_id}: ${frappe.utils.escape_html(row.reason)}`)
-						.join("<br>");
-					let errors = (result.errors || [])
-						.map((row) => `${row.scenario_id}: ${frappe.utils.escape_html(row.reason)}`)
-						.join("<br>");
-					frappe.msgprint({
-						title: __("Sandbox submit"),
-						indicator: errors ? "orange" : "green",
-						message: `
-							<p>${__("Posted to FBR and submitted")}: ${(result.created || []).length}</p>
-							${created ? `<p>${created}</p>` : ""}
-							${skipped ? `<p>${__("Skipped")}:<br>${skipped}</p>` : ""}
-							${errors ? `<p>${__("Not submitted — FBR rejected")}:<br>${errors}</p>` : ""}
-						`,
-					});
-				},
-			});
+			submit_sandbox_scenarios_sequentially(frm, ids);
 		},
 	});
 	dialog.show();
+}
+
+function submit_sandbox_scenarios_sequentially(frm, ids) {
+	// One scenario per desk request. The gateway closes the connection at 120
+	// seconds and the desk shows "Request Timed Out". Several scenarios, and
+	// SN017's rate checks, do not fit in that one wait.
+	let created = [];
+	let skipped = [];
+	let errors = [];
+	let index = 0;
+
+	function show_result() {
+		frappe.dom.unfreeze();
+		let created_html = created
+			.map((row) => `${row.scenario_id}: ${row.name}${row.fbr_invoice_no ? " — " + row.fbr_invoice_no : ""}`)
+			.join("<br>");
+		let skipped_html = skipped
+			.map((row) => `${row.scenario_id}: ${frappe.utils.escape_html(row.reason)}`)
+			.join("<br>");
+		let errors_html = errors
+			.map((row) => `${row.scenario_id}: ${frappe.utils.escape_html(row.reason)}`)
+			.join("<br>");
+		frappe.msgprint({
+			title: __("Sandbox submit"),
+			indicator: errors.length ? "orange" : "green",
+			message: `
+				<p>${__("Posted to FBR and submitted")}: ${created.length}</p>
+				${created_html ? `<p>${created_html}</p>` : ""}
+				${skipped_html ? `<p>${__("Skipped")}:<br>${skipped_html}</p>` : ""}
+				${errors_html ? `<p>${__("Not submitted — FBR rejected")}:<br>${errors_html}</p>` : ""}
+			`,
+		});
+	}
+
+	function next() {
+		if (index >= ids.length) {
+			show_result();
+			return;
+		}
+		let sn = ids[index];
+		index += 1;
+		frappe.dom.freeze(__("Submitting {0} ({1} of {2})...", [sn, index, ids.length]));
+		frappe.call({
+			method: "di.api.create_sandbox_scenario_drafts",
+			args: { company: frm.doc.company, scenario_ids: [sn] },
+			callback(r) {
+				let result = (r && r.message) || {};
+				created = created.concat(result.created || []);
+				skipped = skipped.concat(result.skipped || []);
+				errors = errors.concat(result.errors || []);
+				next();
+			},
+			error() {
+				errors.push({
+					scenario_id: sn,
+					reason: __(
+						"Stopped before FBR answered. Refresh and check this scenario before sending it again."
+					),
+				});
+				next();
+			},
+		});
+	}
+
+	next();
 }

@@ -62,6 +62,7 @@ class SaleTaxInvoice(Document):
 	# end: auto-generated types
 
 	def validate(self):
+		self._enforce_production_for_panel()
 		self._sync_buyer_details()
 		self._sync_seller_details()
 		self._sync_item_details()
@@ -72,6 +73,7 @@ class SaleTaxInvoice(Document):
 		self._set_qr_code_data()
 
 	def before_submit(self):
+		self._enforce_production_for_panel()
 		if not self.get("invoice_items"):
 			frappe.throw(_("At least one invoice item is required."))
 		self._apply_scenario_sale_type()
@@ -82,6 +84,15 @@ class SaleTaxInvoice(Document):
 			from di.integrations.sale_tax_invoice_api import post_sale_tax_invoice
 
 			post_sale_tax_invoice(self)
+
+	def _enforce_production_for_panel(self):
+		"""Client panel users always file on FBR Production — never Sandbox."""
+		from di.panel import is_panel_user
+
+		user = frappe.session.user
+		owner = cstr(self.owner or "")
+		if is_panel_user(user) or (owner and is_panel_user(owner)):
+			self.fbr_environment = "Production"
 
 	def _sync_buyer_details(self):
 		if not self.buyer:

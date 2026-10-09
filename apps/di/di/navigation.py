@@ -25,6 +25,11 @@ NAVIGATION_LINKS = [
 	("DI Error Codes", "DI Error Code", "Grey"),
 ]
 
+# Desk pages shipped by this app, shown right after Home.
+PAGE_LINKS = [
+	("AI Assistant", "di-ai-assistant", "Blue"),
+]
+
 
 def sync_digital_invoicing_navigation():
 	"""Keep the app sidebar/workspace aligned with standalone DI DocTypes."""
@@ -93,6 +98,15 @@ def _sync_workspace(links):
 		}
 	]
 
+	for index, (label, page, color) in enumerate(_existing_pages(), start=1):
+		workspace.append(
+			"shortcuts",
+			{"color": color, "label": label, "link_to": page, "stats_filter": "[]", "type": "Page"},
+		)
+		content.append(
+			{"id": f"di_page_{index:02d}", "type": "shortcut", "data": {"shortcut_name": label, "col": 3}}
+		)
+
 	for index, (label, doctype, color) in enumerate(links, start=1):
 		workspace.append(
 			"shortcuts",
@@ -146,12 +160,19 @@ def _sync_workspace_sidebar(links):
 
 	sidebar.set("items", [])
 	sidebar.append("items", _sidebar_item("Home", WORKSPACE_NAME, "Workspace"))
+	for label, page, _color in _existing_pages():
+		sidebar.append("items", _sidebar_item(label, page, "Page"))
 	sidebar.append("items", _sidebar_item("Learn Digital Invoicing", "", "URL", LEARN_URL))
 
 	for label, doctype, _color in links:
 		sidebar.append("items", _sidebar_item(label, doctype, "DocType"))
 
 	sidebar.save(ignore_permissions=True)
+
+
+def _existing_pages():
+	"""PAGE_LINKS whose Page record exists on this site (it appears after migrate)."""
+	return [(label, page, color) for label, page, color in PAGE_LINKS if frappe.db.exists("Page", page)]
 
 
 def _sidebar_item(label, link_to, link_type, url=None):

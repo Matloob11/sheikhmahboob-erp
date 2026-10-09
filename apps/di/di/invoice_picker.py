@@ -43,14 +43,14 @@ def build_sale_invoice_company_cards(sellers, invoices):
 
 
 def default_invoice_selection(companies, panel_user: bool = False) -> dict:
-	"""One assigned company: panel users see sandbox + production together."""
+	"""One assigned company: panel users open Production invoices only."""
 	if len(companies or []) != 1:
 		return {}
 	name = companies[0].get("name") if isinstance(companies[0], dict) else getattr(companies[0], "name", None)
 	if not name:
 		return {}
 	if panel_user:
-		return {"company": name, "environment": "All"}
+		return {"company": name, "environment": "Production"}
 	return {"company": name}
 
 

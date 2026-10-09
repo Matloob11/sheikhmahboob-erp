@@ -1,0 +1,92 @@
+{
+ "actions": [],
+ "creation": "2026-09-26 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "demo_user",
+  "demo_seller",
+  "login_url",
+  "column_break_1",
+  "rotate_on",
+  "password_rotated",
+  "next_password",
+  "section_notes",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "demo_user",
+   "fieldtype": "Data",
+   "label": "Demo User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "demo_seller",
+   "fieldtype": "Data",
+   "label": "Demo Seller",
+   "read_only": 1
+  },
+  {
+   "fieldname": "login_url",
+   "fieldtype": "Data",
+   "label": "Login URL",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "rotate_on",
+   "fieldtype": "Date",
+   "label": "Rotate Password On",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "password_rotated",
+   "fieldtype": "Check",
+   "label": "Password Rotated",
+   "read_only": 1
+  },
+  {
+   "fieldname": "next_password",
+   "fieldtype": "Password",
+   "label": "Next Password"
+  },
+  {
+   "fieldname": "section_notes",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes",
+   "read_only": 1
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-09-26 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Digital Invoicing",
+ "name": "DI Demo Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

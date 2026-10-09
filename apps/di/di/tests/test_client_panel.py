@@ -65,6 +65,8 @@ class TestPanelPasswordAndMode(unittest.TestCase):
 		self.assertIn("doc.mode", html)
 		self.assertIn("assigned_seller_names", html)
 		self.assertIn("Login URL", html)
+		self.assertIn("Sheikh Mahboob", html)
+		self.assertIn("cp-welcome", html)
 
 
 class TestPanelIsolation(unittest.TestCase):
@@ -211,3 +213,77 @@ class TestPanelIsolation(unittest.TestCase):
 			ensure.assert_called_once_with("client@example.com", "Acme")
 			provision.assert_called_once_with("Acme")
 			remove.assert_not_called()
+
+
+class _PermRow:
+	def __init__(self, role, permlevel=0, **rights):
+		self.role = role
+		self.permlevel = permlevel
+		self._rights = rights
+
+	def get(self, key, default=None):
+		if key in self._rights:
+			return self._rights[key]
+		return getattr(self, key, default)
+
+
+class TestPanelCustomDocPermRepair(unittest.TestCase):
+	def test_gap_fill_skips_when_no_custom_perms(self):
+		from di.panel import fill_custom_docperm_gaps_from_docperm
+
+		with patch("di.panel.frappe.db.exists", return_value=False):
+			self.assertEqual(fill_custom_docperm_gaps_from_docperm("HS Code"), 0)
+
+	def test_gap_fill_copies_missing_docperm_roles(self):
+		from di.panel import fill_custom_docperm_gaps_from_docperm
+
+		inserted = []
+
+		def fake_get_all(doctype, **kwargs):
+			if doctype == "Custom DocPerm":
+				return [_PermRow("DI Demo Viewer")]
+			if doctype == "DocPerm":
+				return [
+					_PermRow("All", read=1, select=1, report=1),
+					_PermRow("DI Demo Viewer", read=1),
+				]
+			return []
+
+		class FakeDoc:
+			def insert(self, **kwargs):
+				inserted.append(kwargs)
+
+		with (
+			patch("di.panel.frappe.db.exists", return_value=True),
+			patch("di.panel.frappe.get_all", side_effect=fake_get_all),
+			patch("di.panel.frappe.get_doc", side_effect=lambda *a, **k: FakeDoc()),
+		):
+			added = fill_custom_docperm_gaps_from_docperm("HS Code")
+
+		self.assertEqual(added, 1)
+		self.assertEqual(len(inserted), 1)
+
+	def test_ensure_panel_perms_upserts_when_custom_mode(self):
+		from di.panel import ensure_di_panel_permissions
+
+		upserts = []
+
+		with (
+			patch("di.panel.ensure_di_panel_role"),
+			patch("di.panel.frappe.get_all", return_value=[]),
+			patch("di.panel.frappe.db.exists", return_value=True),
+			patch("di.panel.fill_custom_docperm_gaps_from_docperm", return_value=2),
+			patch("di.panel._doctype_has_custom_perms", return_value=True),
+			patch(
+				"di.panel.upsert_custom_docperm",
+				side_effect=lambda dt, role, values, permlevel=0: upserts.append((dt, role)),
+			),
+			patch("di.panel.frappe.clear_cache"),
+		):
+			result = ensure_di_panel_permissions()
+
+		self.assertGreater(result["gaps_filled"], 0)
+		self.assertIn(("Sale Tax Invoice", "DI Panel User"), upserts)
+		self.assertIn(("HS Code", "DI Panel User"), upserts)
+		self.assertIn("Sale Tax Invoice", result["panel_perms_ensured"])
+		self.assertIn("HS Code", result["panel_perms_ensured"])

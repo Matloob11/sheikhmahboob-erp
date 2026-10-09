@@ -158,8 +158,15 @@ def _never_sent(exc):
 	return False
 
 
-def request(method, url, token, context, json_body=None, params=None, extra_headers=None):
-	"""Call FBR and return the decoded body, or raise one of the errors above."""
+def request(method, url, token, context, json_body=None, params=None, extra_headers=None, *, timeout=None):
+	"""Call FBR and return the decoded body, or raise one of the errors above.
+
+	`timeout` is (connect seconds, read seconds). Callers that are only
+	looking something up — a scenario list, a rate table — pass a short one.
+	A hung lookup used to sit inside the desk request until nginx cut it at
+	120 seconds and the screen showed "Request Timed Out".
+	"""
+	wait = timeout or (CONNECT_TIMEOUT, READ_TIMEOUT)
 	for attempt in range(CONNECT_ATTEMPTS):
 		try:
 			response = requests.request(
@@ -168,7 +175,7 @@ def request(method, url, token, context, json_body=None, params=None, extra_head
 				json=json_body,
 				params=params,
 				headers=_headers(token, extra_headers),
-				timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
+				timeout=wait,
 			)
 			break
 		except requests.Timeout as exc:
@@ -209,9 +216,11 @@ def request(method, url, token, context, json_body=None, params=None, extra_head
 	return _parse(response, context)
 
 
-def post(url, token, payload, context, extra_headers=None):
-	return request("POST", url, token, context, json_body=payload, extra_headers=extra_headers)
+def post(url, token, payload, context, extra_headers=None, *, timeout=None):
+	return request(
+		"POST", url, token, context, json_body=payload, extra_headers=extra_headers, timeout=timeout
+	)
 
 
-def get(url, token, context, params=None):
-	return request("GET", url, token, context, params=params)
+def get(url, token, context, params=None, *, timeout=None):
+	return request("GET", url, token, context, params=params, timeout=timeout)

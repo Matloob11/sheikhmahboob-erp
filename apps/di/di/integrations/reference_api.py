@@ -441,7 +441,9 @@ def sync_sale_type_rates(date=None, trans_type_id=None, origination_supplier=Non
 	return {"data": data, "message": _("{0} records received").format(len(data))}
 
 
-def get_sale_type_rates(date=None, trans_type_id=None, origination_supplier=None, company=None):
+def get_sale_type_rates(
+	date=None, trans_type_id=None, origination_supplier=None, company=None, timeout=None
+):
 	"""Fetch sale type rate rows from FBR API v2."""
 	token = _get_token(company)
 	url = f"{REF_BASE_V2}/SaleTypeToRate"
@@ -453,7 +455,7 @@ def get_sale_type_rates(date=None, trans_type_id=None, origination_supplier=None
 	if origination_supplier:
 		params["originationSupplier"] = origination_supplier
 
-	return _make_get_request(url, token, "sale type rates", params=params)
+	return _make_get_request(url, token, "sale type rates", params=params, timeout=timeout)
 
 
 @frappe.whitelist()
@@ -610,13 +612,13 @@ def _get_seller_province(company):
 	)
 
 
-def _make_get_request(url, token, data_type, params=None):
+def _make_get_request(url, token, data_type, params=None, timeout=None):
 	"""Make an authenticated GET request to the FBR reference API."""
 	from di.integrations.http import FBRError
 	from di.integrations.http import get as fbr_get
 
 	try:
-		data = fbr_get(url, token, data_type, params=params)
+		data = fbr_get(url, token, data_type, params=params, timeout=timeout)
 	except FBRError as e:
 		create_log(
 			"DI Settings",

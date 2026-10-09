@@ -30,13 +30,13 @@ class TestInvoicePickerCards(unittest.TestCase):
 		self.assertEqual(cards[1]["sandbox"], 0)
 		self.assertEqual(cards[1]["production"], 0)
 
-	def test_panel_user_with_one_company_opens_all_environments(self):
+	def test_panel_user_with_one_company_opens_production(self):
 		from di.invoice_picker import default_invoice_selection
 
 		companies = [{"name": "Acme", "sandbox": 9, "production": 0}]
 		self.assertEqual(
 			default_invoice_selection(companies, panel_user=True),
-			{"company": "Acme", "environment": "All"},
+			{"company": "Acme", "environment": "Production"},
 		)
 		self.assertEqual(default_invoice_selection(companies, panel_user=False), {"company": "Acme"})
 		self.assertEqual(default_invoice_selection([], panel_user=True), {})

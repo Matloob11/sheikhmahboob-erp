@@ -240,10 +240,10 @@ def _get_validate_url(settings):
 	return f"{DI_BASE_URL}{path}"
 
 
-def _make_request(url, payload, token, context="invoice submission"):
+def _make_request(url, payload, token, context="invoice submission", timeout=None):
 	from di.integrations.http import post
 
-	return post(url, token, payload, context)
+	return post(url, token, payload, context, timeout=timeout)
 
 
 def _is_valid_response(response):

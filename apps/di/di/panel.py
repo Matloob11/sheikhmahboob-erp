@@ -15,6 +15,123 @@ SELLER_DOCTYPE = "Seller Or Company"
 ALLOWED_MODULES = {"Digital Invoicing", "Core", "Desk", "Workflow"}
 PROTECTED_USERS = {"Administrator", "Guest"}
 
+# Rights DI Panel User must keep when a DocType is in Custom DocPerm mode.
+# Demo / Role Permission Manager Custom DocPerm rows otherwise hide JSON DocPerm.
+PANEL_WRITE_DOCTYPES = {
+	"Sale Tax Invoice": {
+		"read": 1,
+		"write": 1,
+		"create": 1,
+		"delete": 0,
+		"submit": 1,
+		"cancel": 0,
+		"amend": 0,
+		"report": 1,
+		"export": 1,
+		"import": 0,
+		"print": 1,
+		"email": 1,
+		"share": 0,
+		"select": 1,
+	},
+	"Buyer": {
+		"read": 1,
+		"write": 1,
+		"create": 1,
+		"delete": 1,
+		"submit": 0,
+		"cancel": 0,
+		"amend": 0,
+		"report": 1,
+		"export": 1,
+		"import": 0,
+		"print": 1,
+		"email": 1,
+		"share": 0,
+		"select": 1,
+	},
+	"Tax Item": {
+		"read": 1,
+		"write": 1,
+		"create": 1,
+		"delete": 1,
+		"submit": 0,
+		"cancel": 0,
+		"amend": 0,
+		"report": 1,
+		"export": 1,
+		"import": 0,
+		"print": 1,
+		"email": 1,
+		"share": 0,
+		"select": 1,
+	},
+	"Seller Or Company": {
+		"read": 1,
+		"write": 1,
+		"create": 1,
+		"delete": 0,
+		"submit": 0,
+		"cancel": 0,
+		"amend": 0,
+		"report": 1,
+		"export": 1,
+		"import": 0,
+		"print": 1,
+		"email": 1,
+		"share": 0,
+		"select": 1,
+	},
+}
+
+PANEL_READ_DOCTYPES = (
+	"HS Code",
+	"HS Uom",
+	"Province",
+	"Sale Type",
+	"Transaction Type",
+	"Scenario",
+	"Sandbox Scenario",
+	"SRO Schedule",
+	"SRO Item",
+	"DI Error Code",
+)
+
+PANEL_READ_RIGHTS = {
+	"read": 1,
+	"write": 0,
+	"create": 0,
+	"delete": 0,
+	"submit": 0,
+	"cancel": 0,
+	"amend": 0,
+	"report": 1,
+	"export": 1,
+	"import": 0,
+	"print": 1,
+	"email": 1,
+	"share": 0,
+	"select": 1,
+}
+
+_PERM_COPY_FIELDS = (
+	"read",
+	"write",
+	"create",
+	"delete",
+	"submit",
+	"cancel",
+	"amend",
+	"report",
+	"export",
+	"import",
+	"print",
+	"email",
+	"share",
+	"select",
+	"if_owner",
+)
+
 
 def generate_panel_password(length: int = 12) -> str:
 	"""Readable password with upper, lower, and a digit. No symbols (PDF / SMS)."""
@@ -75,10 +192,30 @@ def is_panel_user(user: str | None = None) -> bool:
 	return PANEL_ROLE in roles
 
 
+def is_scoped_seller_user(user: str | None = None) -> bool:
+	"""Client panel users and the read-only demo viewer both see only their sellers."""
+	from di.demo import is_demo_viewer
+
+	return is_panel_user(user) or is_demo_viewer(user)
+
+
 def get_allowed_sellers(user: str | None = None) -> list[str]:
 	"""Client Panel assignment is the source of truth. User Permission is a fallback
-	for sellers the client created themselves after login."""
+	for sellers the client created themselves after login.
+
+	The demo viewer is locked to DEMO TRADERS via User Permission only.
+	"""
+	from di.demo import DEMO_SELLER, is_demo_viewer
+
 	user = user or frappe.session.user
+	if is_demo_viewer(user):
+		permitted = frappe.get_all(
+			"User Permission",
+			filters={"user": user, "allow": SELLER_DOCTYPE},
+			pluck="for_value",
+		)
+		return [name for name in permitted if name] or [DEMO_SELLER]
+
 	assigned = frappe.get_all(
 		"Client Panel Seller",
 		filters={"parent": user, "parenttype": "Client Panel"},
@@ -130,7 +267,7 @@ def _seller_value(doc) -> str | None:
 
 
 def _permission_query(doctype: str, fieldname: str, user: str | None = None) -> str | None:
-	if not is_panel_user(user):
+	if not is_scoped_seller_user(user):
 		return None
 	allowed = get_allowed_sellers(user)
 	if not allowed:
@@ -140,7 +277,7 @@ def _permission_query(doctype: str, fieldname: str, user: str | None = None) -> 
 
 
 def get_seller_permission_query(user: str | None = None) -> str | None:
-	if not is_panel_user(user):
+	if not is_scoped_seller_user(user):
 		return None
 	allowed = get_allowed_sellers(user)
 	if not allowed:
@@ -150,12 +287,17 @@ def get_seller_permission_query(user: str | None = None) -> str | None:
 
 
 def get_buyer_permission_query(user: str | None = None) -> str | None:
-	if not is_panel_user(user):
+	from di.demo import is_demo_viewer
+
+	if not is_scoped_seller_user(user):
 		return None
 	allowed = get_allowed_sellers(user)
 	if not allowed:
 		return "1=0"
 	escaped = ", ".join(frappe.db.escape(name) for name in allowed)
+	# Demo must not see shared walk-in buyers that belong to every real client.
+	if is_demo_viewer(user):
+		return f"`tabBuyer`.`seller` in ({escaped})"
 	return (
 		f"(`tabBuyer`.`seller` in ({escaped})"
 		" or (ifnull(`tabBuyer`.`seller`,'')=''"
@@ -172,6 +314,19 @@ def get_invoice_permission_query(user: str | None = None) -> str | None:
 
 
 def has_seller_scoped_permission(doc, ptype: str | None = None, user: str | None = None) -> bool:
+	from di.demo import is_demo_viewer
+
+	user = user or frappe.session.user
+	if is_demo_viewer(user):
+		# Read-only: never create / write / delete / submit under this login.
+		if ptype not in (None, "read", "print", "email", "export", "report", "share"):
+			return False
+		seller = _seller_value(doc)
+		allowed = set(get_allowed_sellers(user))
+		if seller and seller in allowed:
+			return True
+		return False
+
 	if not is_panel_user(user):
 		return True
 	if ptype == "create":
@@ -286,10 +441,113 @@ def _ensure_unregistered_buyer(seller: str) -> str:
 	return label
 
 
+def _doctype_has_custom_perms(doctype: str) -> bool:
+	return bool(frappe.db.exists("Custom DocPerm", {"parent": doctype}))
+
+
+def fill_custom_docperm_gaps_from_docperm(doctype: str) -> int:
+	"""When Custom DocPerm is active, copy any DocPerm roles that are missing.
+
+	Frappe ignores DocPerm entirely once a DocType has any Custom DocPerm row.
+	Demo / Role Permission Manager often leave only one role in Custom DocPerm,
+	which hides DI Panel User and All from the sidebar.
+	"""
+	if not _doctype_has_custom_perms(doctype):
+		return 0
+	existing = {
+		(row.role, int(row.permlevel or 0))
+		for row in frappe.get_all(
+			"Custom DocPerm",
+			filters={"parent": doctype},
+			fields=["role", "permlevel"],
+		)
+	}
+	added = 0
+	for row in frappe.get_all("DocPerm", filters={"parent": doctype}, fields=["*"]):
+		key = (row.role, int(row.permlevel or 0))
+		if key in existing:
+			continue
+		values = {field: int(row.get(field) or 0) for field in _PERM_COPY_FIELDS}
+		frappe.get_doc(
+			{
+				"doctype": "Custom DocPerm",
+				"parent": doctype,
+				"parenttype": "DocType",
+				"parentfield": "permissions",
+				"role": row.role,
+				"permlevel": int(row.permlevel or 0),
+				**values,
+			}
+		).insert(ignore_permissions=True)
+		existing.add(key)
+		added += 1
+	return added
+
+
+def upsert_custom_docperm(doctype: str, role: str, values: dict, permlevel: int = 0) -> None:
+	"""Create or update one Custom DocPerm row. Only call when custom mode is already on."""
+	existing = frappe.db.exists(
+		"Custom DocPerm",
+		{"parent": doctype, "role": role, "permlevel": permlevel},
+	)
+	if existing:
+		doc = frappe.get_doc("Custom DocPerm", existing)
+		dirty = False
+		for key, value in values.items():
+			if int(doc.get(key) or 0) != int(value):
+				doc.set(key, value)
+				dirty = True
+		if dirty:
+			doc.save(ignore_permissions=True)
+		return
+	frappe.get_doc(
+		{
+			"doctype": "Custom DocPerm",
+			"parent": doctype,
+			"parenttype": "DocType",
+			"parentfield": "permissions",
+			"role": role,
+			"permlevel": permlevel,
+			**values,
+		}
+	).insert(ignore_permissions=True)
+
+
+def ensure_di_panel_permissions() -> dict:
+	"""Restore Client Panel DocType access after Custom DocPerm overrides DocPerm."""
+	ensure_di_panel_role()
+	gaps = 0
+	ensured = []
+
+	targets = set(PANEL_WRITE_DOCTYPES) | set(PANEL_READ_DOCTYPES)
+	# Also repair any other DocType already stuck in custom-perm mode (e.g. demo list).
+	for name in frappe.get_all("Custom DocPerm", pluck="parent"):
+		if name:
+			targets.add(name)
+
+	for doctype in sorted(targets):
+		if not frappe.db.exists("DocType", doctype):
+			continue
+		gaps += fill_custom_docperm_gaps_from_docperm(doctype)
+		if not _doctype_has_custom_perms(doctype):
+			# DocPerm from the DocType JSON is still active — leave it alone.
+			continue
+		if doctype in PANEL_WRITE_DOCTYPES:
+			upsert_custom_docperm(doctype, PANEL_ROLE, PANEL_WRITE_DOCTYPES[doctype])
+			ensured.append(doctype)
+		elif doctype in PANEL_READ_DOCTYPES:
+			upsert_custom_docperm(doctype, PANEL_ROLE, PANEL_READ_RIGHTS)
+			ensured.append(doctype)
+
+	frappe.clear_cache()
+	return {"gaps_filled": gaps, "panel_perms_ensured": ensured}
+
+
 def repair_client_panel_assignments() -> None:
 	"""Create missing User Permissions and seller extras for every Client Panel."""
 	if not frappe.db.exists("DocType", "Client Panel"):
 		return
+	ensure_di_panel_permissions()
 	for name in frappe.get_all("Client Panel", filters={"disabled": 0}, pluck="name"):
 		try:
 			panel = frappe.get_doc("Client Panel", name)

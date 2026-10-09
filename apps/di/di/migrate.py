@@ -1,6 +1,6 @@
 from di.custom_fields import setup_custom_fields
 from di.navigation import sync_digital_invoicing_navigation
-from di.panel import ensure_di_panel_role, repair_client_panel_assignments
+from di.panel import ensure_di_panel_permissions, ensure_di_panel_role, repair_client_panel_assignments
 from di.seed_data import (
 	seed_di_error_codes,
 	seed_fbr_scenarios,
@@ -13,6 +13,7 @@ from di.seed_data import (
 def after_migrate():
 	setup_custom_fields()
 	ensure_di_panel_role()
+	ensure_di_panel_permissions()
 	repair_client_panel_assignments()
 	seed_hs_uoms()
 	seed_hs_codes()

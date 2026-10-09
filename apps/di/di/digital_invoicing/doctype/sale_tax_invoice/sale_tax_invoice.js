@@ -5,7 +5,9 @@ frappe.ui.form.on("Sale Tax Invoice", {
 
 	refresh(frm) {
 		render_qr_code(frm);
-		calculate_invoice_totals(frm);
+		// Do not frm.set_value here — that marks the form dirty after Save and
+		// hides Submit (Frappe only shows Submit on a clean draft).
+		calculate_invoice_totals(frm, { silent: true });
 		add_fbr_buttons(frm);
 	},
 
@@ -49,8 +51,14 @@ function apply_invoice_picker_defaults(frm) {
 	if (selection.company && !frm.doc.seller__business_name) {
 		frm.set_value("seller__business_name", selection.company);
 	}
-	if (selection.environment && !frm.doc.fbr_environment) {
-		frm.set_value("fbr_environment", selection.environment);
+	// New invoices always land on Production unless an admin explicitly
+	// opened the Sandbox list. "All" / blank → Production.
+	let environment = selection.environment;
+	if (!environment || environment === "All") {
+		environment = "Production";
+	}
+	if (!frm.doc.fbr_environment || frm.doc.fbr_environment !== environment) {
+		frm.set_value("fbr_environment", environment);
 	}
 }
 
@@ -99,7 +107,8 @@ function calculate_invoice_item(frm, cdt, cdn) {
 	calculate_invoice_totals(frm);
 }
 
-function calculate_invoice_totals(frm) {
+function calculate_invoice_totals(frm, opts) {
+	opts = opts || {};
 	let total_sales = 0;
 	let total_taxes = 0;
 	let total_sales_with_taxes = 0;
@@ -117,6 +126,16 @@ function calculate_invoice_totals(frm) {
 		total_taxes += taxes;
 		total_sales_with_taxes += flt(row.total_values) || sales + taxes;
 	});
+
+	if (opts.silent) {
+		frm.doc.total_sales = total_sales;
+		frm.doc.total_taxes = total_taxes;
+		frm.doc.total_sales_with_taxes = total_sales_with_taxes;
+		frm.refresh_field("total_sales");
+		frm.refresh_field("total_taxes");
+		frm.refresh_field("total_sales_with_taxes");
+		return;
+	}
 
 	frm.set_value("total_sales", total_sales);
 	frm.set_value("total_taxes", total_taxes);

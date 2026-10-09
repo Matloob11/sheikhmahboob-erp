@@ -77,7 +77,7 @@
    "reqd": 1
   },
   {
-   "default": "Sandbox",
+   "default": "Production",
    "fieldname": "fbr_environment",
    "fieldtype": "Select",
    "hidden": 1,

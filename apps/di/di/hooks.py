@@ -76,6 +76,7 @@ standard_queries = {
 
 role_home_page = {
 	"DI Panel User": "digital-invoicing",
+	"DI Demo Viewer": "digital-invoicing",
 }
 
 # Generators
@@ -196,6 +197,9 @@ doc_events = {
 scheduler_events = {
 	"hourly": [
 		"di.tasks.alert_unposted_invoices",
+	],
+	"daily": [
+		"di.demo.rotate_demo_password_if_due",
 	],
 }
 

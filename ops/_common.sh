@@ -9,10 +9,18 @@ SITE="sheikhmahboob.com"
 
 resolve_key() {
   local candidates=(
+    "/mnt/c/Users/Hp/.ssh/hostinger_187_53_143_235"
+    "/c/Users/Hp/.ssh/hostinger_187_53_143_235"
+    "C:/Users/Hp/.ssh/hostinger_187_53_143_235"
+    "${HOME}/.ssh/hostinger_187_53_143_235"
     "/mnt/c/Users/Matloob/.ssh/hostinger_srv1992968"
     "/c/Users/Matloob/.ssh/hostinger_srv1992968"
     "C:/Users/Matloob/.ssh/hostinger_srv1992968"
     "${HOME}/.ssh/hostinger_srv1992968"
+    "/mnt/c/Users/Matloob/.ssh/id_ed25519_hostinger2"
+    "/c/Users/Matloob/.ssh/id_ed25519_hostinger2"
+    "C:/Users/Matloob/.ssh/id_ed25519_hostinger2"
+    "${HOME}/.ssh/id_ed25519_hostinger2"
   )
   local k
   for k in "${candidates[@]}"; do
@@ -21,7 +29,7 @@ resolve_key() {
       return 0
     fi
   done
-  echo "SSH key hostinger_srv1992968 not found" >&2
+  echo "SSH key not found. Expected hostinger_srv1992968 or id_ed25519_hostinger2" >&2
   return 1
 }
 
