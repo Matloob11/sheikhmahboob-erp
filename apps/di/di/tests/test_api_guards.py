@@ -54,6 +54,27 @@ class TestApiGuards(unittest.TestCase):
 				post_sale_tax_invoice("STI-1")
 			post.assert_not_called()
 
+	def test_post_sale_tax_invoice_persists_via_db_set_not_memory_only(self):
+		"""The API call operates on an already-submitted doc with no enclosing
+		save(); resync=True is what makes _apply_success db_set the number
+		instead of setting it only on the in-memory doc, where it would be
+		lost the moment the caller reloads."""
+		from di.api import post_sale_tax_invoice
+
+		doc = FakeDoc(
+			doctype="Sale Tax Invoice",
+			name="STI-1",
+			docstatus=1,
+			fbr_invoice_no="",
+		)
+		with (
+			patch("di.api.frappe.get_doc", return_value=doc),
+			patch("di.api.frappe.has_permission", return_value=True),
+			patch("di.integrations.sale_tax_invoice_api.post_sale_tax_invoice") as post,
+		):
+			post_sale_tax_invoice("STI-1")
+			post.assert_called_once_with(doc, resync=True)
+
 	def test_clear_fbr_invoice_no_refused_when_post_success_log_exists(self):
 		from di.api import clear_fbr_invoice_no
 
