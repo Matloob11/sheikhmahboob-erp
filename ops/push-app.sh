@@ -65,15 +65,19 @@ if [[ "$NO_MIGRATE" -eq 1 ]]; then
 fi
 
 set +e
-ssh_run "sudo -u frappe bash -lc 'cd $BENCH && bench build --app $APP && $MIGRATE_CMD && bench --site $SITE clear-cache && bench restart'"
+ssh_run "sudo -u frappe bash -lc 'cd $BENCH && bench build --app $APP && $MIGRATE_CMD && bench --site $SITE clear-cache'"
 RC=$?
 set -e
 if [[ $RC -ne 0 ]]; then
-  echo "PUSH_FAILED: migrate/build/restart failed." >&2
+  echo "PUSH_FAILED: build/migrate failed." >&2
   echo "Restore with:" >&2
-  echo "  tar -xzf $APP_BACKUP_TGZ -C $BENCH/apps && bench --site $SITE migrate && bench restart" >&2
+  echo "  tar -xzf $APP_BACKUP_TGZ -C $BENCH/apps && bench --site $SITE migrate && supervisorctl restart frappe-bench-web: frappe-bench-workers:" >&2
   exit "$RC"
 fi
+
+# The frappe user has no sudo, so bench restart cannot drive supervisor; restart as root.
+echo "=== restart web + workers (root) ==="
+ssh_run "supervisorctl restart frappe-bench-web: frappe-bench-workers: && sleep 5 && supervisorctl status"
 
 echo "=== prove ==="
 ssh_run "curl -sS -o /dev/null -w 'https=%{http_code}\n' https://sheikhmahboob.com/"
