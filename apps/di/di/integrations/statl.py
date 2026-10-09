@@ -22,6 +22,9 @@ def check_status(registration_no, date=None, company=None):
 		date: Date to check against (defaults to today)
 		company: Company for token lookup
 	"""
+	from di.integrations.reference_api import _guard_reference_access
+
+	_guard_reference_access()
 	if not registration_no:
 		frappe.throw(_("Registration number is required"))
 
@@ -67,6 +70,9 @@ def get_registration_type(registration_no, company=None):
 		registration_no: NTN or CNIC number
 		company: Company for token lookup
 	"""
+	from di.integrations.reference_api import _guard_reference_access
+
+	_guard_reference_access()
 	if not registration_no:
 		frappe.throw(_("Registration number is required"))
 

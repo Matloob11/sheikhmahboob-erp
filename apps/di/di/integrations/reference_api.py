@@ -16,6 +16,7 @@ from di.digital_invoicing.doctype.di_log.di_log import create_log
 @frappe.whitelist()
 def sync_provinces(company=None):
 	"""Sync provinces from FBR API."""
+	_guard_reference_access(writes=("Province",))
 	token = _get_token(company)
 	url = f"{REF_BASE_V1}/provinces"
 	data = _make_get_request(url, token, "provinces")
@@ -51,6 +52,7 @@ def sync_hs_codes(company=None):
 	UOM master data is synchronized through the dedicated UOM endpoint, so the
 	HS code sync only updates the code and description.
 	"""
+	_guard_reference_access(writes=("HS Code",))
 	token = _get_token(company)
 	url = f"{REF_BASE_V1}/itemdesccode"
 	data = _make_get_request(url, token, "HS codes")
@@ -94,7 +96,7 @@ def _guard_reference_access(writes=None):
 
 
 @frappe.whitelist()
-def fetch_hs_code_uom(hs_code, company=None):
+def fetch_hs_code_uom(hs_code, company=None, seller=None, force=False):
 	"""Fetch the FBR UOM for one HS code and cache it on the HS Code record.
 
 	FBR exposes UOMs one HS code at a time. Walking all 7,800 of them is 7,800
@@ -102,28 +104,38 @@ def fetch_hs_code_uom(hs_code, company=None):
 	every invoice fell back to the ERPNext UOM — a value FBR rejects with error
 	0099. Fetching the single code actually being used costs one request and is
 	remembered afterwards.
+
+	``seller`` is preferred; ``company`` remains as a deprecated alias. When a
+	seller is given, credentials come from that seller (panel-scoped). Otherwise
+	the DI Settings path is used after ``_guard_reference_access``.
 	"""
 	if not hs_code or not frappe.db.exists("HS Code", hs_code):
 		return None
 
 	cached = frappe.db.get_value("HS Code", hs_code, "uom")
-	if cached:
+	if cached and not force:
 		return cached
 
-	_guard_reference_access(writes=("HS Code", "HS Uom"))
+	from di.integrations.seller_credentials import resolve_seller_arg, seller_fbr_context
 
-	if not company:
-		company = frappe.defaults.get_global_default("company")
-
-	token = _get_token(company)
+	seller_name = resolve_seller_arg(seller=seller, company=company)
+	if seller_name:
+		frappe.has_permission("Tax Item", "write", throw=True)
+		token, _province, annexure_id = seller_fbr_context(seller_name)
+	else:
+		_guard_reference_access(writes=("HS Code", "HS Uom"))
+		if not company:
+			company = frappe.defaults.get_global_default("company")
+		token = _get_token(company)
+		annexure_id = None
+		if company:
+			annexure_id = frappe.db.get_value("DI Settings", {"company": company}, "annexure_id")
+		annexure_id = annexure_id or DEFAULT_ANNEXURE_ID
 
 	# annexure_id is not optional: without it FBR answers 200 with an empty list
 	# for every HS code, which is what made the old sync look like it worked
 	# while filling in nothing. 1 is the sales annexure and is the right default
 	# for sale invoices; DI Settings can override it.
-	annexure_id = None
-	if company:
-		annexure_id = frappe.db.get_value("DI Settings", {"company": company}, "annexure_id")
 	params = {"hs_code": hs_code, "annexure_id": annexure_id or DEFAULT_ANNEXURE_ID}
 
 	rows = _make_get_request(f"{REF_BASE_V2}/HS_UOM", token, "HS Code Uoms", params=params) or []
@@ -132,7 +144,8 @@ def fetch_hs_code_uom(hs_code, company=None):
 		if not uom:
 			continue
 		_ensure_hs_uom(uom, _row_value(item, "uoM_ID", "uom_id"))
-		frappe.db.set_value("HS Code", hs_code, "uom", uom, update_modified=False)
+		if frappe.has_permission("HS Code", "write"):
+			frappe.db.set_value("HS Code", hs_code, "uom", uom, update_modified=False)
 		return uom
 
 	return None
@@ -177,6 +190,7 @@ def sync_hs_code_uoms(company=None, limit=250):
 @frappe.whitelist()
 def sync_uoms(company=None):
 	"""Sync UOMs from FBR API."""
+	_guard_reference_access(writes=("HS Uom",))
 	token = _get_token(company)
 	url = f"{REF_BASE_V1}/uom"
 	data = _make_get_request(url, token, "UOMs")
@@ -195,6 +209,7 @@ def sync_uoms(company=None):
 @frappe.whitelist()
 def sync_transaction_types(company=None):
 	"""Sync transaction types from FBR API."""
+	_guard_reference_access(writes=("Transaction Type", "Sale Type"))
 	token = _get_token(company)
 	url = f"{REF_BASE_V1}/transtypecode"
 	data = _make_get_request(url, token, "transaction types")
@@ -245,6 +260,7 @@ def sync_sro_item_codes(sro_id=None, date=None, company=None):
 	the UOM list, so the old code stored UOM rows as SRO Items), and the date
 	must be ISO — the dd-Mon-yyyy form the rate endpoints want returns 500 here.
 	"""
+	_guard_reference_access(writes=("SRO Item",))
 	token = _get_token(company)
 	url = f"{REF_BASE_V2}/SROItem"
 	iso_date = getdate(date or nowdate()).strftime("%Y-%m-%d")
@@ -290,6 +306,7 @@ def sync_sro_item_codes(sro_id=None, date=None, company=None):
 @frappe.whitelist()
 def sync_sro_schedules(rate_id=None, date=None, origination_supplier=None, company=None):
 	"""Sync SRO schedules from FBR API."""
+	_guard_reference_access(writes=("SRO Schedule",))
 	token = _get_token(company)
 	url = f"{REF_BASE_V1}/SroSchedule"
 
@@ -328,7 +345,7 @@ def sync_sro_schedules(rate_id=None, date=None, origination_supplier=None, compa
 
 
 @frappe.whitelist()
-def get_sro_schedules_for_rate(rate_id, company=None, date=None):
+def get_sro_schedules_for_rate(rate_id, company=None, date=None, seller=None):
 	"""SRO schedules FBR accepts for one rate, as pickable options.
 
 	FBR rejects any line whose rate is not 18% unless it carries a schedule it
@@ -338,11 +355,9 @@ def get_sro_schedules_for_rate(rate_id, company=None, date=None):
 	if not rate_id:
 		return []
 
-	_guard_reference_access(writes=("SRO Schedule",))
-
-	token = _get_token(company)
-	if not company:
-		company = frappe.defaults.get_global_default("company")
+	token, province_code, _annexure = _seller_or_settings_token(
+		seller=seller, company=company, require_doctype_write="Sale Tax Invoice"
+	)
 
 	rows = (
 		_make_get_request(
@@ -352,12 +367,13 @@ def get_sro_schedules_for_rate(rate_id, company=None, date=None):
 			params={
 				"date": _format_reference_date(date),
 				"rate_id": cint(rate_id),
-				"origination_supplier_csv": _get_company_province_code(company),
+				"origination_supplier_csv": province_code,
 			},
 		)
 		or []
 	)
 
+	can_cache = frappe.has_permission("SRO Schedule", "write")
 	options = []
 	for row in rows:
 		desc = _row_value(row, "srO_DESC", "sro_desc", "description")
@@ -365,7 +381,7 @@ def get_sro_schedules_for_rate(rate_id, company=None, date=None):
 		if not desc:
 			continue
 		options.append({"sro_id": sro_id, "sro_desc": desc})
-		if not frappe.db.exists("SRO Schedule", desc):
+		if can_cache and not frappe.db.exists("SRO Schedule", desc):
 			frappe.get_doc({"doctype": "SRO Schedule", "sro_desc": desc, "sro_id": sro_id}).insert(
 				ignore_permissions=True
 			)
@@ -374,7 +390,7 @@ def get_sro_schedules_for_rate(rate_id, company=None, date=None):
 
 
 @frappe.whitelist()
-def get_sro_items_for_schedule(sro_id, date=None, company=None):
+def get_sro_items_for_schedule(sro_id, date=None, company=None, seller=None):
 	"""Item serial numbers FBR accepts under one SRO schedule.
 
 	Error 0078 rejects any serial that is not on this list, so guessing "1" never
@@ -383,9 +399,9 @@ def get_sro_items_for_schedule(sro_id, date=None, company=None):
 	if not sro_id:
 		return []
 
-	_guard_reference_access()
-
-	token = _get_token(company)
+	token, _province, _annexure = _seller_or_settings_token(
+		seller=seller, company=company, require_doctype_write="Sale Tax Invoice"
+	)
 	rows = (
 		_make_get_request(
 			f"{REF_BASE_V2}/SROItem",
@@ -405,7 +421,7 @@ def get_sro_items_for_schedule(sro_id, date=None, company=None):
 
 
 @frappe.whitelist()
-def get_sro_serials_for_schedule(schedule=None, company=None, date=None):
+def get_sro_serials_for_schedule(schedule=None, company=None, date=None, seller=None):
 	"""Serial strings FBR accepts under one SRO Schedule name.
 
 	The invoice row stores the serial text (70, 1(A), Region-I), not the SRO Item
@@ -427,25 +443,41 @@ def get_sro_serials_for_schedule(schedule=None, company=None, date=None):
 	sro_id = frappe.db.get_value("SRO Schedule", schedule, "sro_id")
 	if not sro_id:
 		return []
-	return [
-		cstr(row.get("serial")).strip()
-		for row in get_sro_items_for_schedule(sro_id, date=date, company=company)
-		if cstr(row.get("serial")).strip()
-	]
+
+	# Call FBR with the seller context directly — do not go through the
+	# DI-Settings-guarded get_sro_items_for_schedule path when a seller is set.
+	token, _province, _annexure = _seller_or_settings_token(
+		seller=seller, company=company, require_doctype_write="Sale Tax Invoice"
+	)
+	rows = (
+		_make_get_request(
+			f"{REF_BASE_V2}/SROItem",
+			token,
+			"SRO items",
+			params={"date": getdate(date or nowdate()).strftime("%Y-%m-%d"), "sro_id": cint(sro_id)},
+		)
+		or []
+	)
+	return list(
+		dict.fromkeys(
+			cstr(r.get("srO_ITEM_DESC")).strip() for r in rows if cstr(r.get("srO_ITEM_DESC")).strip()
+		)
+	)
 
 
 @frappe.whitelist()
 def sync_sale_type_rates(date=None, trans_type_id=None, origination_supplier=None, company=None):
 	"""Sync sale type to rate mappings from FBR API v2."""
+	_guard_reference_access()
 	data = get_sale_type_rates(date=date, trans_type_id=trans_type_id, origination_supplier=origination_supplier, company=company)
 	return {"data": data, "message": _("{0} records received").format(len(data))}
 
 
 def get_sale_type_rates(
-	date=None, trans_type_id=None, origination_supplier=None, company=None, timeout=None
+	date=None, trans_type_id=None, origination_supplier=None, company=None, timeout=None, token=None
 ):
 	"""Fetch sale type rate rows from FBR API v2."""
-	token = _get_token(company)
+	token = token or _get_token(company)
 	url = f"{REF_BASE_V2}/SaleTypeToRate"
 
 	params = {}
@@ -461,6 +493,7 @@ def get_sale_type_rates(
 @frappe.whitelist()
 def sync_sro_schedules_for_rates(date=None, company=None):
 	"""Sync SRO schedules for all available transaction-type/rate combinations."""
+	_guard_reference_access(writes=("SRO Schedule",))
 	origin = _get_company_province_code(company)
 	transaction_types = frappe.get_all(
 		"Transaction Type",
@@ -512,6 +545,7 @@ def sync_all_reference_data(company=None):
 	"""Sync API-backed reference data and local lookup rows used by the workspace."""
 	from di.seed_data import seed_di_error_codes, seed_fbr_scenarios, seed_sandbox_scenarios_from_scenarios
 
+	_guard_reference_access()
 	results = []
 	for func in (
 		sync_provinces,
@@ -532,6 +566,24 @@ def sync_all_reference_data(company=None):
 	results.append({"message": _("DI error codes seeded"), "result": seed_di_error_codes()})
 
 	return {"message": _("Reference data sync completed"), "results": results}
+
+
+def _seller_or_settings_token(seller=None, company=None, require_doctype_write=None):
+	"""Token + province for form lookups: seller context when given, else DI Settings."""
+	from di.integrations.seller_credentials import resolve_seller_arg, seller_fbr_context
+
+	seller_name = resolve_seller_arg(seller=seller, company=company)
+	if seller_name:
+		if require_doctype_write:
+			frappe.has_permission(require_doctype_write, "write", throw=True)
+		token, province_code, annexure_id = seller_fbr_context(seller_name)
+		return token, province_code, annexure_id
+
+	_guard_reference_access()
+	if not company:
+		company = frappe.defaults.get_global_default("company")
+	token = _get_token(company)
+	return token, _get_company_province_code(company), None
 
 
 def _get_token(company=None):

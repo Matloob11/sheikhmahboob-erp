@@ -91,8 +91,11 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Sandbox Run",
+   "no_copy": 1,
    "options": "\nPending Review\nFBR Validated\nAlready Successful",
-   "print_hide": 1
+   "permlevel": 1,
+   "print_hide": 1,
+   "read_only": 1
   },
   {
    "fieldname": "column_break_invoice",
@@ -103,18 +106,24 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "FBR Invoice No",
+   "no_copy": 1,
+   "permlevel": 1,
    "read_only": 1
   },
   {
    "fieldname": "qr_code",
    "fieldtype": "HTML",
-   "label": "QR Code"
+   "label": "QR Code",
+   "no_copy": 1,
+   "permlevel": 1
   },
   {
    "fieldname": "qr_code_data",
    "fieldtype": "HTML Editor",
    "hidden": 1,
    "label": "QR Code Data",
+   "no_copy": 1,
+   "permlevel": 1,
    "read_only": 1
   },
   {
@@ -269,6 +278,12 @@
    "role": "System Manager",
    "share": 1,
    "submit": 1,
+   "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "System Manager",
    "write": 1
   },
   {

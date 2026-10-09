@@ -1,4 +1,7 @@
+import frappe
+from frappe import _
 from frappe.model.document import Document
+from frappe.utils import cstr
 
 
 class Buyer(Document):
@@ -25,4 +28,14 @@ class Buyer(Document):
 		buyer_registration_type: DF.Literal["Registered", "Unregistered"]
 	# end: auto-generated types
 
-	pass
+	def validate(self):
+		from di.panel import is_panel_user
+
+		# Shared walk-in buyers (blank seller) are administrator-only. A panel
+		# user saving one would open a cross-tenant write path through that row.
+		if is_panel_user() and not cstr(self.get("seller") or "").strip():
+			frappe.throw(
+				_("Client Panel users must assign a Seller on Buyer {0}.").format(
+					cstr(self.get("buyer_businessname") or self.name or _("(new)"))
+				)
+			)

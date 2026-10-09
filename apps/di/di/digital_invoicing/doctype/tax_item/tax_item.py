@@ -126,9 +126,13 @@ def get_tax_rate_details(
 	transaction_type=None,
 	company=None,
 	date=None,
+	seller=None,
 ):
 	"""Fetch the current FBR rate for the selected item context."""
 	from di.integrations.reference_api import _get_company_province_code, get_sale_type_rates
+	from di.integrations.seller_credentials import resolve_seller_arg, seller_fbr_context
+
+	frappe.has_permission("Tax Item", "write", throw=True)
 
 	if not hs_code:
 		frappe.throw(_("HS Code is required before fetching tax rate."))
@@ -143,12 +147,23 @@ def get_tax_rate_details(
 			)
 		)
 
-	origin = _get_company_province_code(company)
+	seller_name = resolve_seller_arg(seller=seller, company=company)
+	rate_token = None
+	if seller_name:
+		rate_token, origin, _annexure = seller_fbr_context(seller_name)
+		rate_company = seller_name
+	else:
+		from di.integrations.reference_api import _guard_reference_access
+
+		_guard_reference_access()
+		origin = _get_company_province_code(company)
+		rate_company = company
 	rate_rows = get_sale_type_rates(
 		date=date,
 		trans_type_id=transaction["transaction_type_id"],
 		origination_supplier=origin,
-		company=company,
+		company=rate_company,
+		token=rate_token,
 	)
 	options = [_normalise_rate_row(row) for row in rate_rows]
 	options = [row for row in options if row.get("tax_desc")]

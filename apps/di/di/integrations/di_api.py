@@ -102,6 +102,10 @@ def post_invoice(doc, resync=False):
 		return
 	if not resync and not settings.auto_post_on_submit:
 		return
+	# Mirror of the standalone fbr_invoice_no guard: an amended or duplicated
+	# ERPNext invoice that still carries di_integration_id must not file again.
+	if not resync and doc.get("di_integration_id"):
+		return
 
 	payload = build_di_payload(doc)
 	url = _get_post_url(settings)

@@ -329,17 +329,52 @@ def has_seller_scoped_permission(doc, ptype: str | None = None, user: str | None
 
 	if not is_panel_user(user):
 		return True
-	if ptype == "create":
-		return True
-	if getattr(doc, "doctype", None) == SELLER_DOCTYPE and callable(getattr(doc, "is_new", None)) and doc.is_new():
-		return True
-	seller = _seller_value(doc)
+
 	allowed = set(get_allowed_sellers(user))
-	if seller and seller in allowed:
+	seller = _seller_value(doc)
+	is_new = callable(getattr(doc, "is_new", None)) and doc.is_new()
+
+	# New Seller Or Company: panel user may create their own company before the
+	# Client Panel Seller row exists (assignment is written after insert).
+	if getattr(doc, "doctype", None) == SELLER_DOCTYPE and is_new:
 		return True
+
+	# Shared walk-in Unregistered Buyer (no seller): readable, not writable.
 	if getattr(doc, "doctype", None) == "Buyer" and not seller:
-		return cstr(doc.get("buyer_registration_type")) == "Unregistered"
+		if cstr(doc.get("buyer_registration_type")) != "Unregistered":
+			return False
+		return ptype in (None, "read", "print", "email", "export", "report", "select")
+
+	if ptype == "create":
+		# Blank seller is filled in before_validate; a named foreign seller is not.
+		return (not seller) or (seller in allowed)
+
+	if seller and seller in allowed:
+		# Re-pointing a saved draft to another seller must not slip through: the
+		# hook sees the in-memory value, so also require the stored seller.
+		if (
+			ptype in ("write", "delete", "submit", "cancel")
+			and not is_new
+			and getattr(doc, "name", None)
+			and getattr(doc, "doctype", None)
+		):
+			stored = _stored_seller(doc)
+			if stored and stored not in allowed:
+				return False
+		return True
 	return False
+
+
+def _stored_seller(doc) -> str | None:
+	"""Seller currently on disk for a named document (ignores in-memory edits)."""
+	doctype = getattr(doc, "doctype", None)
+	name = getattr(doc, "name", None)
+	if not doctype or not name:
+		return None
+	if doctype == SELLER_DOCTYPE:
+		return name
+	field = "seller__business_name" if doctype == "Sale Tax Invoice" else "seller"
+	return frappe.db.get_value(doctype, name, field)
 
 
 def ensure_user_permission(user: str, seller: str) -> None:

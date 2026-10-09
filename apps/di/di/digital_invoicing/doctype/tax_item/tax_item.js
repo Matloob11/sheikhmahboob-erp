@@ -159,6 +159,7 @@ function fetch_tax_rate_for_form(frm, show_errors = false) {
 		hs_code: frm.doc.hs_code,
 		product_uom: frm.doc.product_uom,
 		transaction_type: frm.doc.transaction_type,
+		seller: frm.doc.seller,
 		company: frappe.defaults.get_default("company")
 	})
 		.then((details) => {
@@ -189,6 +190,7 @@ function fetch_tax_rate_for_quick_entry(quick_entry) {
 		hs_code,
 		product_uom,
 		transaction_type: dialog.get_value("transaction_type"),
+		seller: dialog.get_value("seller"),
 		company: frappe.defaults.get_default("company")
 	})
 		.then((details) => {

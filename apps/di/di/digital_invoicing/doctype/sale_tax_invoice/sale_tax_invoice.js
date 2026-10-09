@@ -214,7 +214,7 @@ async function load_sro_serials_for_row(frm, cdt, cdn) {
 
 	let serials = await frappe.xcall("di.integrations.reference_api.get_sro_serials_for_schedule", {
 		schedule: row.sro_schedule_no,
-		company: frm.doc.seller__business_name
+		seller: frm.doc.seller__business_name
 	});
 	if (!serials || !serials.length) {
 		frappe.msgprint(__("No SRO item serials found for {0}. Sync SRO Item Codes, or type the serial FBR gave you.", [row.sro_schedule_no]));
@@ -263,7 +263,7 @@ async function fill_sro_details(frm) {
 
 		let schedules = await frappe.xcall("di.integrations.reference_api.get_sro_schedules_for_rate", {
 			rate_id: rate_id,
-			company: frm.doc.seller__business_name
+			seller: frm.doc.seller__business_name
 		});
 
 		if (!schedules || !schedules.length) {
@@ -280,7 +280,7 @@ async function fill_sro_details(frm) {
 		let schedule = schedules.find((s) => String(s.sro_id) === chosen);
 		let serials = await frappe.xcall("di.integrations.reference_api.get_sro_items_for_schedule", {
 			sro_id: chosen,
-			company: frm.doc.seller__business_name
+			seller: frm.doc.seller__business_name
 		});
 
 		if (!serials || !serials.length) {
