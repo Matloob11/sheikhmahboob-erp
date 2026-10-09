@@ -316,11 +316,21 @@
    "write": 1
   },
   {
+   "permlevel": 1,
+   "read": 1,
+   "role": "DI Panel User"
+  },
+  {
    "create": 1,
    "read": 1,
    "role": "Accounts User",
    "submit": 1,
    "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Accounts User"
   }
  ],
  "row_format": "Dynamic",

@@ -573,6 +573,10 @@ def ensure_di_panel_permissions() -> dict:
 		elif doctype in PANEL_READ_DOCTYPES:
 			upsert_custom_docperm(doctype, PANEL_ROLE, PANEL_READ_RIGHTS)
 			ensured.append(doctype)
+		# FBR number / QR sit on permlevel 1 so clients cannot edit them, but they
+		# must still be able to read (and print) those fields after filing.
+		if doctype == "Sale Tax Invoice":
+			upsert_custom_docperm(doctype, PANEL_ROLE, {"read": 1, "write": 0}, permlevel=1)
 
 	frappe.clear_cache()
 	return {"gaps_filled": gaps, "panel_perms_ensured": ensured}

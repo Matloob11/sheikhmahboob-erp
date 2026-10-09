@@ -116,6 +116,14 @@ class TestApiGuards(unittest.TestCase):
 		]
 		self.assertTrue(sm_pl1)
 		self.assertEqual(sm_pl1[0].get("write"), 1)
+		# Panel (and Accounts) may read FBR number / QR but must not write them.
+		for role in ("DI Panel User", "Accounts User"):
+			pl1 = [
+				p for p in meta["permissions"] if p.get("role") == role and p.get("permlevel") == 1
+			]
+			self.assertTrue(pl1, role)
+			self.assertEqual(pl1[0].get("read"), 1, role)
+			self.assertNotEqual(pl1[0].get("write"), 1, role)
 
 
 class TestPanelCreateScope(unittest.TestCase):
