@@ -231,7 +231,7 @@ function di_add_buttons(frm) {
 				() => {
 					frappe
 						.xcall("di.api.verify_buyer", {
-							customer: frm.doc.custome
+							customer: frm.doc.customer
 						})
 						.then((result) => {
 							frappe.msgprint({
