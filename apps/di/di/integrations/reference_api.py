@@ -265,40 +265,50 @@ def sync_sro_item_codes(sro_id=None, date=None, company=None):
 	url = f"{REF_BASE_V2}/SROItem"
 	iso_date = getdate(date or nowdate()).strftime("%Y-%m-%d")
 
+	schedules = frappe.get_all("SRO Schedule", fields=["name", "sro_id"], limit_page_length=0)
+	by_id = {cstr(row.sro_id): row.name for row in schedules if row.sro_id}
 	if sro_id:
 		sro_ids = [sro_id]
 	else:
-		sro_ids = [s for s in frappe.get_all("SRO Schedule", pluck="sro_id") if s]
+		sro_ids = list(by_id.keys())
 
 	if not sro_ids:
 		frappe.throw(_("No SRO Schedules found. Sync SRO Schedules before SRO item codes."))
 
-	data = []
+	count = 0
 	for current in sro_ids:
+		schedule_name = by_id.get(cstr(current))
 		rows = _make_get_request(
 			url, token, "SRO item codes", params={"date": iso_date, "sro_id": current}
 		)
-		data.extend(rows or [])
-
-	count = 0
-	for item in data:
-		sro_item_id = item.get("srO_ITEM_ID")
-		sro_item_desc = item.get("srO_ITEM_DESC") or ""
-
-		existing = frappe.db.exists("SRO Item", {"sro_item_id": sro_item_id})
-		if existing:
-			doc = frappe.get_doc("SRO Item", existing)
-			doc.sro_item_desc = sro_item_desc
-			doc.save(ignore_permissions=True)
-		else:
-			frappe.get_doc(
-				{
-					"doctype": "SRO Item",
-					"sro_item_id": sro_item_id,
-					"sro_item_desc": sro_item_desc,
-				}
-			).insert(ignore_permissions=True)
-		count += 1
+		for item in rows or []:
+			sro_item_id = item.get("srO_ITEM_ID")
+			sro_item_desc = item.get("srO_ITEM_DESC") or ""
+			# Lookup key is (sro_schedule, sro_item_desc); sro_item_id may repeat.
+			existing = None
+			if schedule_name and sro_item_desc:
+				existing = frappe.db.exists(
+					"SRO Item", {"sro_schedule": schedule_name, "sro_item_desc": sro_item_desc}
+				)
+			if not existing and sro_item_id:
+				existing = frappe.db.exists("SRO Item", {"sro_item_id": sro_item_id})
+			if existing:
+				doc = frappe.get_doc("SRO Item", existing)
+				doc.sro_item_desc = sro_item_desc
+				doc.sro_item_id = sro_item_id
+				if schedule_name:
+					doc.sro_schedule = schedule_name
+				doc.save(ignore_permissions=True)
+			else:
+				frappe.get_doc(
+					{
+						"doctype": "SRO Item",
+						"sro_item_id": sro_item_id,
+						"sro_item_desc": sro_item_desc,
+						"sro_schedule": schedule_name,
+					}
+				).insert(ignore_permissions=True)
+			count += 1
 
 	return {"message": _("{0} SRO item codes synced").format(count)}
 
@@ -413,11 +423,26 @@ def get_sro_items_for_schedule(sro_id, date=None, company=None, seller=None):
 		or []
 	)
 
-	return [
-		{"sro_item_id": r.get("srO_ITEM_ID"), "serial": str(r.get("srO_ITEM_DESC"))}
-		for r in rows
-		if r.get("srO_ITEM_DESC")
-	]
+	schedule_name = frappe.db.get_value("SRO Schedule", {"sro_id": cint(sro_id)}, "name")
+	options = []
+	for r in rows:
+		serial = r.get("srO_ITEM_DESC")
+		if not serial:
+			continue
+		options.append({"sro_item_id": r.get("srO_ITEM_ID"), "serial": str(serial)})
+		if schedule_name and frappe.has_permission("SRO Item", "write"):
+			if not frappe.db.exists(
+				"SRO Item", {"sro_schedule": schedule_name, "sro_item_desc": cstr(serial)}
+			):
+				frappe.get_doc(
+					{
+						"doctype": "SRO Item",
+						"sro_item_id": r.get("srO_ITEM_ID"),
+						"sro_item_desc": cstr(serial),
+						"sro_schedule": schedule_name,
+					}
+				).insert(ignore_permissions=True)
+	return options
 
 
 @frappe.whitelist()
