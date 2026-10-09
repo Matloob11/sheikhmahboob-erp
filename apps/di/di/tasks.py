@@ -144,10 +144,9 @@ def run_reference_sync(dotted_path, label, user, **kwargs):
 	on completion". Nothing notified anyone: a sync could fail against FBR and
 	the only trace was an Error Log nobody reads.
 	"""
-	from frappe.utils import get_attr
-
 	try:
-		result = get_attr(dotted_path)(**kwargs)
+		# Frappe 16 exposes get_attr on frappe, not frappe.utils (ImportError in Error Log).
+		result = frappe.get_attr(dotted_path)(**kwargs)
 		message = (result or {}).get("message") if isinstance(result, dict) else None
 		_notify_user(
 			user,
