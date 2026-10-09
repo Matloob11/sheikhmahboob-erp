@@ -98,12 +98,14 @@
   {
    "fieldname": "error_code",
    "fieldtype": "Data",
+   "in_list_view": 1,
    "label": "Error Code",
    "read_only": 1
   },
   {
    "fieldname": "error_message",
    "fieldtype": "Long Text",
+   "in_list_view": 1,
    "label": "Error Message",
    "read_only": 1
   }

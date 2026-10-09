@@ -10,3 +10,4 @@ di.patches.move_seller_tokens_to_password
 di.patches.drop_di_post_attempts
 di.patches.purge_token_versions
 di.patches.clear_orphan_sro_items
+di.patches.delete_junk_province_all

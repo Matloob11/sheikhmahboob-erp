@@ -27,6 +27,9 @@ def sync_provinces(company=None):
 		province_name = item.get("stateProvinceDesc")
 		if not province_name:
 			continue
+		# FBR sometimes returns a junk "all" / code-0 row that is not a province.
+		if cstr(province_name).strip().lower() == "all" or cint(province_code) == 0:
+			continue
 
 		if frappe.db.exists("Province", province_name):
 			doc = frappe.get_doc("Province", province_name)

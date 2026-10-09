@@ -366,6 +366,28 @@ def get_setup_status(company=None):
 		_("Add the sale types you use to the Sale Types table, otherwise Items cannot pick one."),
 	)
 
+	# Standalone path files through Seller Or Company; DI Settings alone is not enough.
+	seller_match = None
+	if settings.ntn_cnic:
+		seller_match = frappe.db.get_value(
+			"Seller Or Company", {"seller_ntncnic": settings.ntn_cnic}, "name"
+		)
+	add(
+		_("Seller Or Company exists with the same NTN as DI Settings"),
+		seller_match,
+		_("Create a Seller Or Company whose NTN matches DI Settings."),
+	)
+	if seller_match:
+		token_field = (
+			"production_token" if cstr(settings.sync_mode) == "Production" else "sandbox_token"
+		)
+		seller_doc = frappe.get_doc("Seller Or Company", seller_match)
+		add(
+			_("That seller holds a token for DI Settings sync mode ({0})").format(settings.sync_mode),
+			seller_doc.get_password(token_field, raise_exception=False),
+			_("Paste the {0} on Seller Or Company {1}.").format(token_field, seller_match),
+		)
+
 	typed = frappe.db.count("Sales Taxes and Charges", {"di_tax_type": ["is", "set"]})
 	add(
 		_("Tax templates carry a Tax Type"),

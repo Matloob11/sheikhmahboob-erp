@@ -152,11 +152,15 @@ class SaleTaxInvoice(Document):
 		if not self.seller__business_name:
 			return
 
+		from frappe.utils import escape_html
+
 		buyer_seller = frappe.db.get_value("Buyer", self.buyer, "seller") if self.buyer else None
 		if buyer_seller and buyer_seller != self.seller__business_name:
 			frappe.throw(
 				_("Buyer {0} belongs to {1}, not to {2}.").format(
-					self.buyer, buyer_seller, self.seller__business_name
+					escape_html(self.buyer),
+					escape_html(buyer_seller),
+					escape_html(self.seller__business_name),
 				)
 			)
 
@@ -167,7 +171,10 @@ class SaleTaxInvoice(Document):
 			if item_seller and item_seller != self.seller__business_name:
 				frappe.throw(
 					_("Row {0}: item {1} belongs to {2}, not to {3}.").format(
-						row.idx, row.description, item_seller, self.seller__business_name
+						row.idx,
+						escape_html(row.description),
+						escape_html(item_seller),
+						escape_html(self.seller__business_name),
 					)
 				)
 

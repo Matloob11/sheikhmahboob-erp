@@ -28,6 +28,10 @@ class TaxItem(Document):
 	def validate(self):
 		from di.integrations.reference_api import _ensure_hs_uom
 
+		name = cstr(self.get("product_description") or self.name or "")
+		if "<" in name or ">" in name:
+			frappe.throw(_("Product description cannot contain < or >."))
+
 		uom = cstr(self.get("product_uom") or "").strip()
 		if uom:
 			if self.is_new() or self.has_value_changed("product_uom"):
