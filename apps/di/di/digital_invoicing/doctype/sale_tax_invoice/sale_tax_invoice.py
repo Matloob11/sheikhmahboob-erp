@@ -72,6 +72,7 @@ class SaleTaxInvoice(Document):
 		self._apply_scenario_sale_type()
 		self._validate_item_sale_type()
 		self._validate_debit_note()
+		self._warn_buyer_registration_mismatch()
 		self._ensure_third_schedule_prices()
 		self._calculate_totals()
 		self._set_qr_code_data()
@@ -257,6 +258,22 @@ class SaleTaxInvoice(Document):
 				frappe.throw(_("Row {0}: Sale Type is required.").format(row.idx))
 			if not frappe.db.exists("Sale Type", sale_type):
 				frappe.throw(_("Row {0}: {1} is not a known Sale Type.").format(row.idx, sale_type))
+
+	def _warn_buyer_registration_mismatch(self):
+		"""Non-blocking: stored FBR status disagrees with the invoice registration type."""
+		from di.integrations.statl import registration_mismatch
+
+		if not self.buyer:
+			return
+		stored = frappe.db.get_value("Buyer", self.buyer, "fbr_registration_status")
+		if registration_mismatch(self.buyer_registration_type, stored):
+			frappe.msgprint(
+				_(
+					"Buyer {0} was last verified with FBR as {1}, but this invoice says {2}."
+				).format(self.buyer, stored, self.buyer_registration_type),
+				indicator="orange",
+				alert=True,
+			)
 
 	def _validate_debit_note(self):
 		"""A Debit Note must point at a submitted, filed invoice it can correct."""
