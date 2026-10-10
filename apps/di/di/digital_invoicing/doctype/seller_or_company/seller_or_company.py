@@ -1,4 +1,7 @@
+import frappe
+from frappe import _
 from frappe.model.document import Document
+from frappe.utils import cstr
 
 
 class SellerOrCompany(Document):
@@ -29,6 +32,9 @@ class SellerOrCompany(Document):
 	def validate(self):
 		from di.panel import enforce_single_client_seller_cap
 
+		name = cstr(self.get("seller__business_name") or "")
+		if "<" in name or ">" in name:
+			frappe.throw(_("Seller / Business Name cannot contain < or >."))
 		enforce_single_client_seller_cap(self)
 
 	def after_insert(self):

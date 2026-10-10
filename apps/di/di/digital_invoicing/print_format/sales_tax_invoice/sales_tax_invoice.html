@@ -128,23 +128,19 @@
 			{% set item_master = frappe.db.get_value("Item", item.item_code, ["hs_code", "hs_uom"], as_dict=1) if item.item_code else {} %}
 			<tr>
 				<td>{{ item.idx }}</td>
-				<td>{{ item.di_hs_code or item_master.hs_code or "" }}</td>
-				<td>{{ item.item_name }}</td>
-				<td>{{ item.di_sale_type or "" }}</td>
+				<td>{{ (item.di_hs_code or item_master.hs_code or "")|e }}</td>
+				<td>{{ item.item_name|e }}</td>
+				<td>{{ (item.di_sale_type or "")|e }}</td>
 				<td class="di-right">{{ item.qty }}</td>
 				<td>{{ item.di_hs_uom or item_master.hs_uom or item.uom or "" }}</td>
 				<td class="di-right">{{ frappe.utils.fmt_money(item.net_amount, currency=doc.currency) }}</td>
 				<td class="di-right">
-					{% set taxes = json.loads(doc.taxes[0].item_wise_tax_detail or "{}") if doc.taxes else {} %}
-					{% set item_tax = taxes.get(item.item_code, [0,0]) %}
-					{% if item_tax is iterable and item_tax is not string %}{{ item_tax[0] if item_tax|length > 0 else 0 }}%{% endif %}
+					{% set item_taxes = _get_taxes(doc) %}
+					{% set tax_bucket = (item_taxes.get(item.item_code) or {}).get("Sales Tax") or {} %}
+					{{ tax_bucket.get("percentage", 0) }}%
 				</td>
 				<td class="di-right">
-					{% if item_tax is iterable and item_tax is not string and item_tax|length > 1 %}
-						{{ frappe.utils.fmt_money(item_tax[1], currency=doc.currency) }}
-					{% else %}
-						{{ frappe.utils.fmt_money(0, currency=doc.currency) }}
-					{% endif %}
+					{{ frappe.utils.fmt_money(tax_bucket.get("amount", 0), currency=doc.currency) }}
 				</td>
 				<td class="di-right">{{ frappe.utils.fmt_money(0, currency=doc.currency) }}</td>
 				<td class="di-right">{{ frappe.utils.fmt_money(item.di_fed_payable or 0, currency=doc.currency) }}</td>

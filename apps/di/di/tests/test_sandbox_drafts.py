@@ -21,6 +21,7 @@ from di.sandbox_drafts import (
 	recipe_for,
 	recipes_for,
 	resolve_sandbox_environment,
+	try_fetch_fbr_scenarios,
 )
 
 SETTINGS_JS = (
@@ -199,6 +200,8 @@ class TestSandboxDraftHelpers(unittest.TestCase):
 		self.assertIn("di.api.create_sandbox_scenario_drafts", js)
 		self.assertIn("Validate & submit", js)
 		self.assertIn("Not submitted — FBR rejected", js)
+		self.assertIn("scenario_ids: [sn]", js)
+		self.assertNotIn("scenario_ids: ids", js)
 
 
 class TestTokenClassification(unittest.TestCase):
@@ -218,12 +221,25 @@ class TestTokenClassification(unittest.TestCase):
 		self.assertEqual(classify_token("tok"), "Unknown")
 
 	@patch("di.sandbox_drafts.classify_token", return_value="Unknown")
-	def test_sync_mode_sandbox_treats_unclear_probe_as_sandbox(self, _mock):
+	def test_sync_mode_sandbox_does_not_probe_fbr(self, mock_classify):
 		self.assertEqual(resolve_sandbox_environment("tok", "Sandbox"), "Sandbox")
+		mock_classify.assert_not_called()
 
 	@patch("di.sandbox_drafts.classify_token", return_value="Production")
-	def test_sync_mode_sandbox_overrides_production_guess(self, _mock):
-		self.assertEqual(resolve_sandbox_environment("tok", "Sandbox"), "Sandbox")
+	def test_production_sync_mode_still_probes(self, mock_classify):
+		self.assertEqual(resolve_sandbox_environment("tok", "Production"), "Production")
+		mock_classify.assert_called_once()
+
+	def test_blank_token_stays_invalid_in_sandbox_mode(self):
+		self.assertEqual(resolve_sandbox_environment("  ", "Sandbox"), "Invalid")
+
+	@patch("di.sandbox_drafts.get", side_effect=Exception("down"))
+	def test_scenario_list_lookup_waits_only_a_few_seconds(self, mock_get):
+		self.assertIsNone(try_fetch_fbr_scenarios("tok"))
+		self.assertGreaterEqual(mock_get.call_count, 1)
+		timeout = mock_get.call_args.kwargs["timeout"]
+		self.assertLessEqual(timeout[0], 5)
+		self.assertLessEqual(timeout[1], 8)
 
 	@patch("di.sandbox_drafts.post")
 	def test_401_on_both_means_invalid(self, mock_post):
@@ -330,3 +346,66 @@ class TestFedStLiveProbe(unittest.TestCase):
 		self.assertEqual(posted_payload["items"][0]["rate"], "10.07%")
 		self.assertEqual(posted_payload["items"][0]["hsCode"], "2710.1240")
 		mock_pin.assert_called_once()
+
+	@patch("di.sandbox_drafts.time.monotonic", side_effect=[0, 1000])
+	@patch("di.sandbox_drafts.fed_st_probe_candidates")
+	@patch("di.integrations.sale_tax_invoice_api.build_sale_tax_invoice_payload")
+	@patch("di.integrations.sale_tax_invoice_api._get_seller_token", return_value="tok")
+	@patch("di.integrations.sale_tax_invoice_api._get_validate_url", return_value="https://fbr/validate")
+	@patch("di.integrations.sale_tax_invoice_api._get_post_url", return_value="https://fbr/post")
+	@patch("di.integrations.di_api._make_request")
+	def test_probe_stops_when_the_time_budget_is_spent(
+		self,
+		mock_request,
+		_post_url,
+		_validate_url,
+		_token,
+		mock_payload,
+		mock_candidates,
+		_clock,
+	):
+		from types import SimpleNamespace
+
+		from di.sandbox_drafts import _probe_and_post_fed_st
+
+		mock_payload.return_value = {
+			"items": [{"quantity": 1, "valueSalesExcludingST": 100, "rate": "8%"}]
+		}
+		mock_candidates.return_value = [("2710.1240", "Liter", "8%", 8)]
+		doc = SimpleNamespace(fbr_invoice_no="", db_set=lambda *a, **k: None)
+		self.assertIsNone(_probe_and_post_fed_st(doc, "FAIZ", "Goods (FED in ST Mode)", "FAIZ"))
+		mock_request.assert_not_called()
+
+	@patch("di.sandbox_drafts.fed_st_probe_candidates")
+	@patch("di.integrations.sale_tax_invoice_api.build_sale_tax_invoice_payload")
+	@patch("di.integrations.sale_tax_invoice_api._get_seller_token", return_value="tok")
+	@patch("di.integrations.sale_tax_invoice_api._get_validate_url", return_value="https://fbr/validate")
+	@patch("di.integrations.sale_tax_invoice_api._get_post_url", return_value="https://fbr/post")
+	@patch("di.integrations.di_api._make_request")
+	def test_uncertain_post_does_not_try_the_next_rate(
+		self,
+		mock_request,
+		_post_url,
+		_validate_url,
+		_token,
+		mock_payload,
+		mock_candidates,
+	):
+		from types import SimpleNamespace
+
+		from di.integrations.http import FBRUncertainError
+		from di.sandbox_drafts import _probe_and_post_fed_st
+
+		mock_payload.return_value = {
+			"items": [{"quantity": 1, "valueSalesExcludingST": 100, "rate": "8%"}]
+		}
+		mock_candidates.return_value = [
+			("2710.1240", "Liter", "8%", 8),
+			("2710.1250", "Liter", "10.07%", 10.07),
+		]
+		valid = {"validationResponse": {"status": "Valid", "statusCode": "00"}}
+		mock_request.side_effect = [valid, FBRUncertainError("read timed out")]
+		doc = SimpleNamespace(fbr_invoice_no="", db_set=lambda *a, **k: None)
+		with self.assertRaises(FBRUncertainError):
+			_probe_and_post_fed_st(doc, "FAIZ", "Goods (FED in ST Mode)", "FAIZ")
+		self.assertEqual(mock_request.call_count, 2)

@@ -10,7 +10,7 @@ Self-contained copy of the live ERP apps. **Not related to the A7 WhatsApp / Ope
 | Site name on server | `sheikhmahboob.com` |
 | Domains | `sheikhmahboob.com`, `www.sheikhmahboob.com` |
 | Apps | `frappe` 16.31.0, `erpnext` 16.32.3, `di` 1.0.0 |
-| SSH key (this machine) | `C:\Users\Matloob\.ssh\hostinger_srv1992968` |
+| SSH key (this machine) | `C:\Users\Hp\.ssh\hostinger_187_53_143_235` (fallback: `C:\Users\Matloob\.ssh\hostinger_srv1992968`) |
 
 ---
 
@@ -57,7 +57,7 @@ From this folder (Git Bash / WSL / Ubuntu):
 Or manually:
 
 ```bash
-ssh -i /mnt/c/Users/Matloob/.ssh/hostinger_srv1992968 \
+ssh -i /mnt/c/Users/Hp/.ssh/hostinger_187_53_143_235 \
   -o IdentitiesOnly=yes \
   root@187.53.143.235
 ```
@@ -65,7 +65,13 @@ ssh -i /mnt/c/Users/Matloob/.ssh/hostinger_srv1992968 \
 Windows PowerShell:
 
 ```powershell
-ssh -i C:\Users\Matloob\.ssh\hostinger_srv1992968 -o IdentitiesOnly=yes root@187.53.143.235
+ssh -i C:\Users\Hp\.ssh\hostinger_187_53_143_235 -o IdentitiesOnly=yes root@187.53.143.235
+```
+
+Site-less DI tests on this machine (WSL Ubuntu, no Windows `.venv`):
+
+```powershell
+wsl -d Ubuntu -- bash /mnt/c/Users/Hp/Desktop/sheikhmahboob-erp/ops/run-tests-wsl.sh
 ```
 
 Then:

@@ -12,7 +12,9 @@
   "buyer_businessname",
   "column_break_buyer",
   "buyer_province",
-  "buyer_address"
+  "buyer_address",
+  "fbr_registration_status",
+  "fbr_verified_on"
  ],
  "fields": [
   {
@@ -66,10 +68,22 @@
    "fieldtype": "Long Text",
    "label": "Buyer Address",
    "reqd": 1
+  },
+  {
+   "fieldname": "fbr_registration_status",
+   "fieldtype": "Data",
+   "label": "FBR Registration Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "fbr_verified_on",
+   "fieldtype": "Datetime",
+   "label": "FBR Verified On",
+   "read_only": 1
   }
  ],
  "links": [],
- "modified": "2026-08-12 16:00:00.000000",
+ "modified": "2026-10-09 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Digital Invoicing",
  "name": "Buyer",

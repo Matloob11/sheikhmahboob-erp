@@ -9,6 +9,7 @@
   "amended_from",
   "invoice_details_section",
   "invoice_type",
+  "return_against",
   "invoice_date",
   "scenario_id",
   "fbr_environment",
@@ -58,8 +59,16 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Invoice Type",
-   "options": "Sale Invoice",
+   "options": "Sale Invoice\nDebit Note",
    "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.invoice_type==\"Debit Note\"",
+   "fieldname": "return_against",
+   "fieldtype": "Link",
+   "label": "Return Against",
+   "mandatory_depends_on": "eval:doc.invoice_type==\"Debit Note\"",
+   "options": "Sale Tax Invoice"
   },
   {
    "default": "Today",
@@ -69,15 +78,16 @@
    "reqd": 1
   },
   {
+   "depends_on": "eval:doc.fbr_environment==\"Sandbox\"",
    "fieldname": "scenario_id",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Scenario ID",
-   "options": "Scenario",
-   "reqd": 1
+   "mandatory_depends_on": "eval:doc.fbr_environment==\"Sandbox\"",
+   "options": "Scenario"
   },
   {
-   "default": "Sandbox",
+   "default": "Production",
    "fieldname": "fbr_environment",
    "fieldtype": "Select",
    "hidden": 1,
@@ -91,8 +101,11 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Sandbox Run",
+   "no_copy": 1,
    "options": "\nPending Review\nFBR Validated\nAlready Successful",
-   "print_hide": 1
+   "permlevel": 1,
+   "print_hide": 1,
+   "read_only": 1
   },
   {
    "fieldname": "column_break_invoice",
@@ -103,18 +116,33 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "FBR Invoice No",
+   "no_copy": 1,
+   "permlevel": 1,
    "read_only": 1
   },
   {
    "fieldname": "qr_code",
    "fieldtype": "HTML",
-   "label": "QR Code"
+   "label": "QR Code",
+   "no_copy": 1,
+   "permlevel": 1
   },
   {
    "fieldname": "qr_code_data",
    "fieldtype": "HTML Editor",
    "hidden": 1,
    "label": "QR Code Data",
+   "no_copy": 1,
+   "permlevel": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "fbr_payload_hash",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "FBR Payload Hash",
+   "no_copy": 1,
+   "permlevel": 1,
    "read_only": 1
   },
   {
@@ -272,6 +300,12 @@
    "write": 1
   },
   {
+   "permlevel": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
    "create": 1,
    "export": 1,
    "print": 1,
@@ -282,11 +316,21 @@
    "write": 1
   },
   {
+   "permlevel": 1,
+   "read": 1,
+   "role": "DI Panel User"
+  },
+  {
    "create": 1,
    "read": 1,
    "role": "Accounts User",
    "submit": 1,
    "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Accounts User"
   }
  ],
  "row_format": "Dynamic",

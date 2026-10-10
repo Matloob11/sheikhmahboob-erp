@@ -144,6 +144,7 @@ def setup_custom_fields():
 				fieldtype="Data",
 				insert_after="di_section",
 				read_only=1,
+				no_copy=1,
 			),
 			dict(
 				fieldname="is_di_posted",
@@ -151,6 +152,7 @@ def setup_custom_fields():
 				fieldtype="Check",
 				insert_after="di_integration_id",
 				read_only=1,
+				no_copy=1,
 			),
 			dict(
 				fieldname="column_break_di",
@@ -163,6 +165,7 @@ def setup_custom_fields():
 				fieldtype="Datetime",
 				insert_after="column_break_di",
 				read_only=1,
+				no_copy=1,
 			),
 			dict(
 				fieldname="di_invoice_type",
@@ -266,6 +269,7 @@ def setup_custom_fields():
 				fieldtype="Data",
 				insert_after="di_section",
 				read_only=1,
+				no_copy=1,
 			),
 			dict(
 				fieldname="is_di_posted",
@@ -273,6 +277,7 @@ def setup_custom_fields():
 				fieldtype="Check",
 				insert_after="di_integration_id",
 				read_only=1,
+				no_copy=1,
 			),
 			dict(
 				fieldname="column_break_di_pi",
@@ -285,6 +290,7 @@ def setup_custom_fields():
 				fieldtype="Datetime",
 				insert_after="column_break_di_pi",
 				read_only=1,
+				no_copy=1,
 			),
 		],
 		"Purchase Invoice Item": [

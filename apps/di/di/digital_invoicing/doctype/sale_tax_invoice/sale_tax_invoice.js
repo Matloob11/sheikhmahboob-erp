@@ -5,12 +5,19 @@ frappe.ui.form.on("Sale Tax Invoice", {
 
 	refresh(frm) {
 		render_qr_code(frm);
-		calculate_invoice_totals(frm);
+		// Do not frm.set_value here — that marks the form dirty after Save and
+		// hides Submit (Frappe only shows Submit on a clean draft).
+		calculate_invoice_totals(frm, { silent: true });
 		add_fbr_buttons(frm);
+		freeze_filed_draft(frm);
 	},
 
 	scenario_id(frm) {
-		set_item_sale_type(frm);
+		// Production rows keep whatever sale type they already carry — only
+		// a Sandbox scenario forces every row to its one sale type.
+		if (frm.doc.fbr_environment === "Sandbox") {
+			set_item_sale_type(frm);
+		}
 	},
 
 	validate(frm) {
@@ -49,8 +56,14 @@ function apply_invoice_picker_defaults(frm) {
 	if (selection.company && !frm.doc.seller__business_name) {
 		frm.set_value("seller__business_name", selection.company);
 	}
-	if (selection.environment && !frm.doc.fbr_environment) {
-		frm.set_value("fbr_environment", selection.environment);
+	// New invoices always land on Production unless an admin explicitly
+	// opened the Sandbox list. "All" / blank → Production.
+	let environment = selection.environment;
+	if (!environment || environment === "All") {
+		environment = "Production";
+	}
+	if (!frm.doc.fbr_environment || frm.doc.fbr_environment !== environment) {
+		frm.set_value("fbr_environment", environment);
 	}
 }
 
@@ -64,6 +77,20 @@ function render_qr_code(frm) {
 	}
 
 	frm.fields_dict.qr_code.$wrapper.empty();
+}
+
+function freeze_filed_draft(frm) {
+	if (frm.doc.docstatus !== 0 || !frm.doc.fbr_invoice_no) {
+		return;
+	}
+	frm.set_read_only();
+	frm.set_intro(
+		__(
+			"Already filed with FBR as {0}. Only Submit is allowed — do not change lines. Open DI Log if you need the FBR response.",
+			[frm.doc.fbr_invoice_no]
+		),
+		"blue"
+	);
 }
 
 function calculate_invoice_item(frm, cdt, cdn) {
@@ -99,7 +126,8 @@ function calculate_invoice_item(frm, cdt, cdn) {
 	calculate_invoice_totals(frm);
 }
 
-function calculate_invoice_totals(frm) {
+function calculate_invoice_totals(frm, opts) {
+	opts = opts || {};
 	let total_sales = 0;
 	let total_taxes = 0;
 	let total_sales_with_taxes = 0;
@@ -117,6 +145,16 @@ function calculate_invoice_totals(frm) {
 		total_taxes += taxes;
 		total_sales_with_taxes += flt(row.total_values) || sales + taxes;
 	});
+
+	if (opts.silent) {
+		frm.doc.total_sales = total_sales;
+		frm.doc.total_taxes = total_taxes;
+		frm.doc.total_sales_with_taxes = total_sales_with_taxes;
+		frm.refresh_field("total_sales");
+		frm.refresh_field("total_taxes");
+		frm.refresh_field("total_sales_with_taxes");
+		return;
+	}
 
 	frm.set_value("total_sales", total_sales);
 	frm.set_value("total_taxes", total_taxes);
@@ -195,7 +233,7 @@ async function load_sro_serials_for_row(frm, cdt, cdn) {
 
 	let serials = await frappe.xcall("di.integrations.reference_api.get_sro_serials_for_schedule", {
 		schedule: row.sro_schedule_no,
-		company: frm.doc.seller__business_name
+		seller: frm.doc.seller__business_name
 	});
 	if (!serials || !serials.length) {
 		frappe.msgprint(__("No SRO item serials found for {0}. Sync SRO Item Codes, or type the serial FBR gave you.", [row.sro_schedule_no]));
@@ -244,7 +282,7 @@ async function fill_sro_details(frm) {
 
 		let schedules = await frappe.xcall("di.integrations.reference_api.get_sro_schedules_for_rate", {
 			rate_id: rate_id,
-			company: frm.doc.seller__business_name
+			seller: frm.doc.seller__business_name
 		});
 
 		if (!schedules || !schedules.length) {
@@ -261,7 +299,7 @@ async function fill_sro_details(frm) {
 		let schedule = schedules.find((s) => String(s.sro_id) === chosen);
 		let serials = await frappe.xcall("di.integrations.reference_api.get_sro_items_for_schedule", {
 			sro_id: chosen,
-			company: frm.doc.seller__business_name
+			seller: frm.doc.seller__business_name
 		});
 
 		if (!serials || !serials.length) {
@@ -389,6 +427,23 @@ function add_fbr_buttons(frm) {
 							frm.reload_doc();
 						});
 				});
+			},
+			__("Digital Invoicing")
+		);
+	}
+
+	if (frm.doc.docstatus === 1 && frm.doc.fbr_invoice_no) {
+		frm.add_custom_button(
+			__("Create Debit Note"),
+			() => {
+				frappe
+					.xcall(
+						"di.digital_invoicing.doctype.sale_tax_invoice.sale_tax_invoice.make_debit_note",
+						{ name: frm.doc.name }
+					)
+					.then((new_name) => {
+						frappe.set_route("Form", "Sale Tax Invoice", new_name);
+					});
 			},
 			__("Digital Invoicing")
 		);

@@ -264,7 +264,7 @@
 <div class="custom-fbr-invoice">
 	<div class="header-section clearfix">
 		<div class="company-block">
-			<h1 class="company-name">{{ doc.seller__business_name or "" }}</h1>
+			<h1 class="company-name">{{ (doc.seller__business_name or "")|e }}</h1>
 		</div>
 		<div class="qr-block">
 			<div class="fbr-logo-wrapper">
@@ -288,15 +288,15 @@
 			<div class="card-title">Seller Information</div>
 			<div class="info-field">
 				<span class="card-label">Business Name</span>
-				<span class="card-value">{{ doc.seller__business_name or "" }}</span>
+				<span class="card-value">{{ (doc.seller__business_name or "")|e }}</span>
 			</div>
 			<div class="info-field">
 				<span class="card-label">Registration No.</span>
-				<span class="card-value">{{ doc.seller_ntncnic or "" }}</span>
+				<span class="card-value">{{ (doc.seller_ntncnic or "")|e }}</span>
 			</div>
 			<div class="info-field">
 				<span class="card-label">Province</span>
-				<span class="card-value">{{ doc.seller_province or "" }}</span>
+				<span class="card-value">{{ (doc.seller_province or "")|e }}</span>
 			</div>
 		</div>
 
@@ -304,15 +304,15 @@
 			<div class="card-title">Buyer Information</div>
 			<div class="info-field">
 				<span class="card-label">Business Name</span>
-				<span class="card-value">{{ buyer_name }}</span>
+				<span class="card-value">{{ buyer_name|e }}</span>
 			</div>
 			<div class="info-field">
 				<span class="card-label">Registration/CNIC No.</span>
-				<span class="card-value">{{ doc.buyer_ntncnic or "" }}</span>
+				<span class="card-value">{{ (doc.buyer_ntncnic or "")|e }}</span>
 			</div>
 			<div class="info-field">
 				<span class="card-label">Province</span>
-				<span class="card-value">{{ doc.buyer_province or "" }}</span>
+				<span class="card-value">{{ (doc.buyer_province or "")|e }}</span>
 			</div>
 		</div>
 
@@ -320,7 +320,7 @@
 			<div class="card-title">Invoice Summary</div>
 			<div class="info-field">
 				<span class="card-label">FBR Invoice No.</span>
-				<span class="card-value">{{ doc.fbr_invoice_no or "" }}</span>
+				<span class="card-value">{{ (doc.fbr_invoice_no or "")|e }}</span>
 			</div>
 			<div class="info-field">
 				<span class="card-label">Invoice Date</span>
@@ -328,7 +328,7 @@
 			</div>
 			<div class="info-field">
 				<span class="card-label">Invoice Type</span>
-				<span class="card-value">{{ doc.invoice_type or "" }}</span>
+				<span class="card-value">{{ (doc.invoice_type or "")|e }}</span>
 			</div>
 		</div>
 	</div>
@@ -351,9 +351,9 @@
 			<tr>
 				<td class="center">{{ item.idx }}</td>
 				<td class="left">
-					<div class="item-name-text">{{ item.description or "" }}</div>
+					<div class="item-name-text">{{ (item.description or "")|e }}</div>
 				</td>
-				<td>{{ frappe.utils.flt(item.quantity or 0, 4) }} {{ item.uom or "" }}</td>
+				<td>{{ frappe.utils.flt(item.quantity or 0, 4) }} {{ (item.uom or "")|e }}</td>
 				<td>{{ frappe.utils.fmt_money(item.sale_rate or 0, currency=None) }}</td>
 				<td>{{ frappe.utils.fmt_money(item.value_sales_excluding_st or 0, currency=None) }}</td>
 				<td>{{ frappe.utils.fmt_money(item_tax, currency=None) }}</td>

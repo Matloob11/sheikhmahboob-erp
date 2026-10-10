@@ -4,14 +4,54 @@ import frappe
 from frappe import _
 from frappe.utils import cstr
 
+_SUPPORTED_INVOICE_DOCTYPES = ("Sales Invoice", "Purchase Invoice", "Sale Tax Invoice")
+
+
+def _require_invoice_doctype(doctype):
+	if doctype not in _SUPPORTED_INVOICE_DOCTYPES:
+		frappe.throw(_("Unsupported document type"))
+
+
+def _require_doc_permission(doctype, name, ptype):
+	doc = frappe.get_doc(doctype, name)
+	frappe.has_permission(doctype, ptype, doc=doc, throw=True)
+	return doc
+
 
 @frappe.whitelist()
 def resync_invoice(doctype, name):
-	"""Re-post an invoice to FBR DI after corrections."""
+	"""Re-post an invoice to FBR DI after corrections.
+
+	A second post of a numbered invoice is a second filing. Clear the number
+	first with ``clear_fbr_invoice_no`` (System Manager, guarded) when that is
+	genuinely required.
+	"""
 	from di.integrations.di_api import post_invoice
 
-	doc = frappe.get_doc(doctype, name)
-	post_invoice(doc, resync=True)
+	_require_invoice_doctype(doctype)
+	doc = _require_doc_permission(doctype, name, "submit")
+	if doctype == "Sale Tax Invoice":
+		if cstr(doc.get("fbr_invoice_no") or "").strip():
+			frappe.throw(
+				_(
+					"Invoice {0} already has FBR number {1}. Clear it first if a Sandbox re-file is required."
+				).format(name, doc.fbr_invoice_no)
+			)
+		from di.integrations.sale_tax_invoice_api import post_sale_tax_invoice as _post
+
+		# resync=True is persistence (db_set), not an override — the FBR number
+		# was already confirmed blank above, so this cannot refile a numbered
+		# invoice; it only makes sure the new number is saved on this
+		# already-submitted doc instead of being set in memory and lost.
+		_post(doc, resync=True)
+	else:
+		if doc.get("di_integration_id") or doc.get("is_di_posted"):
+			frappe.throw(
+				_(
+					"Invoice {0} is already posted to FBR ({1}). Clear the DI integration id before re-filing."
+				).format(name, doc.get("di_integration_id") or _("posted"))
+			)
+		post_invoice(doc, resync=True)
 	return {"success": True, "message": _("Invoice re-synced successfully")}
 
 
@@ -20,14 +60,20 @@ def validate_invoice(doctype, name):
 	"""Validate invoice with FBR without posting."""
 	from di.integrations.di_api import validate_invoice as _validate
 
-	doc = frappe.get_doc(doctype, name)
+	_require_invoice_doctype(doctype)
+	doc = _require_doc_permission(doctype, name, "write")
+	if doctype == "Sale Tax Invoice":
+		from di.integrations.sale_tax_invoice_api import validate_sale_tax_invoice as _sti
+
+		return _sti(doc)
 	return _validate(doc)
 
 
 @frappe.whitelist()
 def get_invoice_preview(doctype, name):
 	"""Preview the DI payload without posting."""
-	doc = frappe.get_doc(doctype, name)
+	_require_invoice_doctype(doctype)
+	doc = _require_doc_permission(doctype, name, "read")
 	if doctype == "Sale Tax Invoice":
 		from di.integrations.sale_tax_invoice_api import build_sale_tax_invoice_payload
 
@@ -48,12 +94,93 @@ def get_sale_invoice_company_cards():
 
 @frappe.whitelist()
 def post_sale_tax_invoice(name):
-	"""Post a submitted standalone Sale Tax Invoice to FBR."""
+	"""Post a submitted standalone Sale Tax Invoice to FBR.
+
+	Refuses a second filing when ``fbr_invoice_no`` is already set. There is no
+	force flag — FBR has no void and no deduplication.
+	"""
 	from di.integrations.sale_tax_invoice_api import post_sale_tax_invoice as _post
 
-	doc = frappe.get_doc("Sale Tax Invoice", name)
+	doc = _require_doc_permission("Sale Tax Invoice", name, "submit")
+	if cint_docstatus(doc) != 1:
+		frappe.throw(_("Sale Tax Invoice {0} must be submitted before posting to FBR.").format(name))
+	if cstr(doc.get("fbr_invoice_no") or "").strip():
+		frappe.throw(
+			_("Sale Tax Invoice {0} already has FBR number {1}; a second post would file again.").format(
+				name, doc.fbr_invoice_no
+			)
+		)
+	# resync=True here is persistence, not permission: the duplicate-filing check
+	# just ran above, so this only tells _apply_success to db_set the number
+	# instead of setting it in memory — this doc is already submitted, there is
+	# no enclosing save() to carry an in-memory assignment to the database.
 	_post(doc, resync=True)
 	return {"success": True, "message": _("Sale Tax Invoice posted to FBR successfully")}
+
+
+def cint_docstatus(doc):
+	from frappe.utils import cint
+
+	return cint(doc.get("docstatus"))
+
+
+@frappe.whitelist()
+def clear_fbr_invoice_no(name, reason):
+	"""Blank a Sale Tax Invoice FBR number (System Manager only).
+
+	Allowed only in Sandbox, or when no successful DI Post log exists for that
+	document and number. Production invoices with a Post Success row are frozen.
+	"""
+	if "System Manager" not in frappe.get_roles():
+		frappe.throw(_("Only System Manager can clear an FBR invoice number."), frappe.PermissionError)
+
+	reason = cstr(reason or "").strip()
+	if not reason:
+		frappe.throw(_("A reason is required to clear an FBR invoice number."))
+
+	doc = frappe.get_doc("Sale Tax Invoice", name)
+	frappe.has_permission("Sale Tax Invoice", "write", doc=doc, throw=True)
+
+	number = cstr(doc.get("fbr_invoice_no") or "").strip()
+	if not number:
+		frappe.throw(_("Sale Tax Invoice {0} has no FBR invoice number to clear.").format(name))
+
+	env = cstr(doc.get("fbr_environment") or "").strip()
+	has_success = frappe.db.exists(
+		"DI Log",
+		{
+			"document_type": "Sale Tax Invoice",
+			"document_name": name,
+			"api_type": "DI Post",
+			"status": "Success",
+			"fbr_invoice_number": number,
+		},
+	)
+	if env != "Sandbox" and has_success:
+		frappe.throw(
+			_(
+				"Cannot clear FBR number {0}: a successful DI Post log exists for Production invoice {1}."
+			).format(number, name)
+		)
+
+	doc.db_set("fbr_invoice_no", "", update_modified=False)
+	doc.db_set("qr_code_data", "", update_modified=False)
+	if doc.meta.has_field("fbr_payload_hash"):
+		doc.db_set("fbr_payload_hash", "", update_modified=False)
+	from di.digital_invoicing.doctype.di_log.di_log import create_log
+
+	create_log(
+		"Sale Tax Invoice",
+		name,
+		{"cleared_number": number, "reason": reason},
+		{},
+		status="Success",
+		api_type="DI Post",
+		title=f"FBR number cleared: {reason[:80]}",
+		error_message=reason,
+	)
+	frappe.db.commit()
+	return {"success": True, "cleared": number}
 
 
 @frappe.whitelist()
@@ -61,7 +188,7 @@ def validate_sale_tax_invoice(name):
 	"""Validate standalone Sale Tax Invoice with FBR without posting."""
 	from di.integrations.sale_tax_invoice_api import validate_sale_tax_invoice as _validate
 
-	doc = frappe.get_doc("Sale Tax Invoice", name)
+	doc = _require_doc_permission("Sale Tax Invoice", name, "write")
 	return _validate(doc)
 
 
@@ -70,6 +197,7 @@ def verify_buyer(customer):
 	"""Check buyer registration status via STATL."""
 	from di.integrations.statl import get_registration_type
 
+	frappe.has_permission("Customer", "read", doc=customer, throw=True)
 	ntn_cnic = frappe.db.get_value("Customer", customer, "ntn_cnic")
 	if not ntn_cnic:
 		frappe.throw(_("Customer {0} does not have NTN/CNIC set").format(customer))
@@ -80,6 +208,9 @@ def verify_buyer(customer):
 def sync_reference_data(data_type, **kwargs):
 	"""Trigger reference data sync from FBR in the background."""
 	from di.integrations import reference_api
+	from di.integrations.reference_api import _guard_reference_access
+
+	_guard_reference_access()
 
 	sync_map = {
 		"all_reference_data": reference_api.sync_all_reference_data,
@@ -123,8 +254,10 @@ def sync_reference_data(data_type, **kwargs):
 @frappe.whitelist()
 def import_seed_hs_codes():
 	"""Import bundled HS codes from di/data/hs_codes.json."""
+	from di.integrations.reference_api import _guard_reference_access
 	from di.seed_data import seed_hs_codes
 
+	_guard_reference_access(writes=("HS Code",))
 	# Explicit user action: always do the work, even if the bundled file is
 	# unchanged since the last seed.
 	result = seed_hs_codes(force=True)
@@ -135,8 +268,10 @@ def import_seed_hs_codes():
 @frappe.whitelist()
 def import_seed_hs_uoms():
 	"""Replace HS UOM master rows with the bundled DI UOM list."""
+	from di.integrations.reference_api import _guard_reference_access
 	from di.seed_data import seed_hs_uoms
 
+	_guard_reference_access(writes=("HS Uom",))
 	result = seed_hs_uoms()
 	frappe.db.commit()
 	return result
@@ -230,6 +365,28 @@ def get_setup_status(company=None):
 		len(settings.get("sale_types") or []),
 		_("Add the sale types you use to the Sale Types table, otherwise Items cannot pick one."),
 	)
+
+	# Standalone path files through Seller Or Company; DI Settings alone is not enough.
+	seller_match = None
+	if settings.ntn_cnic:
+		seller_match = frappe.db.get_value(
+			"Seller Or Company", {"seller_ntncnic": settings.ntn_cnic}, "name"
+		)
+	add(
+		_("Seller Or Company exists with the same NTN as DI Settings"),
+		seller_match,
+		_("Create a Seller Or Company whose NTN matches DI Settings."),
+	)
+	if seller_match:
+		token_field = (
+			"production_token" if cstr(settings.sync_mode) == "Production" else "sandbox_token"
+		)
+		seller_doc = frappe.get_doc("Seller Or Company", seller_match)
+		add(
+			_("That seller holds a token for DI Settings sync mode ({0})").format(settings.sync_mode),
+			seller_doc.get_password(token_field, raise_exception=False),
+			_("Paste the {0} on Seller Or Company {1}.").format(token_field, seller_match),
+		)
 
 	typed = frappe.db.count("Sales Taxes and Charges", {"di_tax_type": ["is", "set"]})
 	add(

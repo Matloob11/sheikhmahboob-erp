@@ -42,6 +42,7 @@ frappe.ui.form.on("Tax Item", {
 		set_hs_code_query(frm);
 		bind_form_product_uom_suggestions(frm);
 		add_fetch_tax_rate_button(frm);
+		add_refresh_uom_button(frm);
 		if (frm.doc.hs_code) {
 			set_product_details_from_hs_code(frm, false, false);
 		}
@@ -74,6 +75,27 @@ function set_hs_code_query(frm) {
 
 function add_fetch_tax_rate_button(frm) {
 	frm.add_custom_button(__("Fetch Tax Rate"), () => fetch_tax_rate_for_form(frm, true));
+}
+
+function add_refresh_uom_button(frm) {
+	if (frm.is_new() || !frm.doc.hs_code) {
+		return;
+	}
+	frm.add_custom_button(__("Refresh UOM from FBR"), () => {
+		frappe
+			.xcall("di.digital_invoicing.doctype.tax_item.tax_item.refresh_product_uom_from_fbr", {
+				name: frm.doc.name
+			})
+			.then((r) => {
+				frm.reload_doc();
+				if (r && r.product_uom) {
+					frappe.show_alert({
+						message: __("Product UOM set to {0}", [r.product_uom]),
+						indicator: "green"
+					});
+				}
+			});
+	});
 }
 
 function set_product_details_from_hs_code(frm, open_description_options = false, update_product_uom = true) {
@@ -159,6 +181,7 @@ function fetch_tax_rate_for_form(frm, show_errors = false) {
 		hs_code: frm.doc.hs_code,
 		product_uom: frm.doc.product_uom,
 		transaction_type: frm.doc.transaction_type,
+		seller: frm.doc.seller,
 		company: frappe.defaults.get_default("company")
 	})
 		.then((details) => {
@@ -189,6 +212,7 @@ function fetch_tax_rate_for_quick_entry(quick_entry) {
 		hs_code,
 		product_uom,
 		transaction_type: dialog.get_value("transaction_type"),
+		seller: dialog.get_value("seller"),
 		company: frappe.defaults.get_default("company")
 	})
 		.then((details) => {

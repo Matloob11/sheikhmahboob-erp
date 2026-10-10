@@ -48,10 +48,11 @@ class SaleTaxInvoice(Document):
 		sandbox_run_status: DF.Literal["", "Pending Review", "FBR Validated", "Already Successful"]
 		invoice_date: DF.Date
 		invoice_items: DF.Table[SaleTaxInvoiceItem]
-		invoice_type: DF.Literal["Sale Invoice"]
+		invoice_type: DF.Literal["Sale Invoice", "Debit Note"]
 		qr_code: DF.HTML | None
 		qr_code_data: DF.HTMLEditor | None
-		scenario_id: DF.Link
+		return_against: DF.Link | None
+		scenario_id: DF.Link | None
 		seller__business_name: DF.Link
 		seller_address: DF.SmallText | None
 		seller_ntncnic: DF.Data | None
@@ -62,16 +63,23 @@ class SaleTaxInvoice(Document):
 	# end: auto-generated types
 
 	def validate(self):
+		self._enforce_production_for_panel()
+		self._validate_scenario_requirement()
 		self._sync_buyer_details()
 		self._sync_seller_details()
 		self._sync_item_details()
 		self._validate_seller_scope()
 		self._apply_scenario_sale_type()
+		self._validate_item_sale_type()
+		self._validate_debit_note()
+		self._warn_buyer_registration_mismatch()
 		self._ensure_third_schedule_prices()
 		self._calculate_totals()
 		self._set_qr_code_data()
+		self._refuse_changes_after_filing()
 
 	def before_submit(self):
+		self._enforce_production_for_panel()
 		if not self.get("invoice_items"):
 			frappe.throw(_("At least one invoice item is required."))
 		self._apply_scenario_sale_type()
@@ -82,6 +90,21 @@ class SaleTaxInvoice(Document):
 			from di.integrations.sale_tax_invoice_api import post_sale_tax_invoice
 
 			post_sale_tax_invoice(self)
+
+	def _enforce_production_for_panel(self):
+		"""Client panel users always file on FBR Production — never Sandbox."""
+		from di.panel import is_panel_user
+
+		user = frappe.session.user
+		owner = cstr(self.owner or "")
+		if is_panel_user(user) or (owner and is_panel_user(owner)):
+			self.fbr_environment = "Production"
+
+	def _validate_scenario_requirement(self):
+		"""Scenario ID selects a sandbox FBR scenario; Production has none."""
+		environment = cstr(self.get("fbr_environment") or "")
+		if environment == "Sandbox" and not self.get("scenario_id"):
+			frappe.throw(_("Scenario ID is required for a Sandbox invoice."))
 
 	def _sync_buyer_details(self):
 		if not self.buyer:
@@ -129,11 +152,15 @@ class SaleTaxInvoice(Document):
 		if not self.seller__business_name:
 			return
 
+		from frappe.utils import escape_html
+
 		buyer_seller = frappe.db.get_value("Buyer", self.buyer, "seller") if self.buyer else None
 		if buyer_seller and buyer_seller != self.seller__business_name:
 			frappe.throw(
 				_("Buyer {0} belongs to {1}, not to {2}.").format(
-					self.buyer, buyer_seller, self.seller__business_name
+					escape_html(self.buyer),
+					escape_html(buyer_seller),
+					escape_html(self.seller__business_name),
 				)
 			)
 
@@ -144,7 +171,10 @@ class SaleTaxInvoice(Document):
 			if item_seller and item_seller != self.seller__business_name:
 				frappe.throw(
 					_("Row {0}: item {1} belongs to {2}, not to {3}.").format(
-						row.idx, row.description, item_seller, self.seller__business_name
+						row.idx,
+						escape_html(row.description),
+						escape_html(item_seller),
+						escape_html(self.seller__business_name),
 					)
 				)
 
@@ -156,19 +186,31 @@ class SaleTaxInvoice(Document):
 			item = frappe.db.get_value(
 				"Tax Item",
 				row.description,
-				["hs_code", "product_uom", "tax_desc", "rate_in_p", "fixed_rs"],
+				["hs_code", "product_uom", "tax_desc", "rate_in_p", "fixed_rs", "transaction_type"],
 				as_dict=1,
 			)
 			if not item:
 				continue
 
-			row.hs_code = item.hs_code
-			row.uom = item.product_uom
+			# fetch_if_empty on the item JSON is not enough alone: this sync
+			# used to overwrite every save, so a corrected UOM never stuck.
+			if not cstr(row.get("hs_code") or "").strip() and item.hs_code:
+				row.hs_code = item.hs_code
+			if not cstr(row.get("uom") or "").strip() and item.product_uom:
+				row.uom = item.product_uom
 			row.rate_in_percentage = item.tax_desc
 			row.tax_rate_value = item.rate_in_p
 			# FBR 0090 treats 0 as missing. Do not wipe a recipe/sale-rate value.
 			if item.fixed_rs:
 				row.fixed_notified_value_or_retail_price = item.fixed_rs
+			# A blank sale type silently sends rate="0%" instead of the real
+			# FBR rate and disables SRO/retail-price checks below, so default
+			# it from the item but never override a row someone already set.
+			if not cstr(row.get("sale_type") or "").strip() and item.transaction_type:
+				row.sale_type = item.transaction_type
+			uom = cstr(row.get("uom") or "").strip()
+			if uom and not frappe.db.exists("HS Uom", uom):
+				frappe.throw(_("Row {0}: UOM {1} is not an HS Uom.").format(row.idx, uom))
 
 	def _ensure_third_schedule_prices(self):
 		for row in self.get("invoice_items") or []:
@@ -197,6 +239,14 @@ class SaleTaxInvoice(Document):
 				)
 
 	def _apply_scenario_sale_type(self):
+		"""Only a Sandbox scenario forces every row to its one sale type.
+
+		Production invoices keep whatever sale type each row carries — FBR
+		accepts different sale types on one Production invoice, and the
+		scenario field there is only a required Select, not a real choice.
+		"""
+		if cstr(self.get("fbr_environment") or "") != "Sandbox":
+			return
 		if not self.scenario_id:
 			return
 
@@ -206,6 +256,59 @@ class SaleTaxInvoice(Document):
 
 		for row in self.get("invoice_items") or []:
 			row.sale_type = sale_type
+
+	def _validate_item_sale_type(self):
+		"""A blank or unknown sale type silently sends rate="0%" (FBR 0007/0013)."""
+		for row in self.get("invoice_items") or []:
+			sale_type = cstr(row.get("sale_type") or "").strip()
+			if not sale_type:
+				frappe.throw(_("Row {0}: Sale Type is required.").format(row.idx))
+			if not frappe.db.exists("Sale Type", sale_type):
+				frappe.throw(_("Row {0}: {1} is not a known Sale Type.").format(row.idx, sale_type))
+
+	def _warn_buyer_registration_mismatch(self):
+		"""Non-blocking: stored FBR status disagrees with the invoice registration type."""
+		from di.integrations.statl import registration_mismatch
+
+		if not self.buyer:
+			return
+		stored = frappe.db.get_value("Buyer", self.buyer, "fbr_registration_status")
+		if registration_mismatch(self.buyer_registration_type, stored):
+			frappe.msgprint(
+				_(
+					"Buyer {0} was last verified with FBR as {1}, but this invoice says {2}."
+				).format(self.buyer, stored, self.buyer_registration_type),
+				indicator="orange",
+				alert=True,
+			)
+
+	def _validate_debit_note(self):
+		"""A Debit Note must point at a submitted, filed invoice it can correct."""
+		if cstr(self.get("invoice_type") or "") != "Debit Note":
+			return
+
+		name = cstr(self.get("return_against") or "").strip()
+		if not name:
+			frappe.throw(_("Return Against is required for a Debit Note."))
+
+		original = frappe.db.get_value(
+			"Sale Tax Invoice",
+			name,
+			["docstatus", "seller__business_name", "fbr_environment", "fbr_invoice_no"],
+			as_dict=True,
+		)
+		if not original:
+			frappe.throw(_("Sale Tax Invoice {0} was not found.").format(name))
+		if original.docstatus != 1:
+			frappe.throw(_("{0} must be submitted before a Debit Note can refer to it.").format(name))
+		if original.seller__business_name != self.seller__business_name:
+			frappe.throw(_("{0} belongs to a different seller than this Debit Note.").format(name))
+		if original.fbr_environment != self.get("fbr_environment"):
+			frappe.throw(
+				_("{0} was filed in a different FBR environment than this Debit Note.").format(name)
+			)
+		if not cstr(original.fbr_invoice_no or "").strip():
+			frappe.throw(_("{0} has no FBR invoice number yet.").format(name))
 
 	def _calculate_totals(self):
 		total_sales = Decimal("0")
@@ -256,3 +359,53 @@ class SaleTaxInvoice(Document):
 			self.qr_code_data = generate_qr_code(self.fbr_invoice_no) or ""
 		except Exception:
 			frappe.log_error(frappe.get_traceback(), _("Sale Tax Invoice QR Code Error"))
+
+	def _refuse_changes_after_filing(self):
+		"""Once FBR has a number, the payload is frozen until Submit or a Debit Note."""
+		number = cstr(self.get("fbr_invoice_no") or "").strip()
+		if not number or self.is_new():
+			return
+		stored_hash = cstr(self.get("fbr_payload_hash") or "").strip()
+		if not stored_hash:
+			return
+		from di.integrations.fbr_outcome import payload_hash
+		from di.integrations.sale_tax_invoice_api import build_sale_tax_invoice_payload
+
+		current = payload_hash(build_sale_tax_invoice_payload(self))
+		if current != stored_hash:
+			frappe.throw(
+				_(
+					"Already filed with FBR as {0}; this invoice cannot be changed. "
+					"Submit it as-is or create a Debit Note."
+				).format(number)
+			)
+
+
+@frappe.whitelist()
+def make_debit_note(name):
+	"""Draft a Debit Note against a submitted, filed Sale Tax Invoice.
+
+	Cancel/amend is deliberately off for panel users (a production filing has
+	no retraction), so a Debit Note is the only correction path. It starts as
+	an exact copy and is then re-pointed: a fresh FBR number, no inherited QR
+	code or payload hash, and ``return_against`` naming the original.
+	"""
+	original = frappe.get_doc("Sale Tax Invoice", name)
+	frappe.has_permission("Sale Tax Invoice", "submit", doc=original, throw=True)
+	if original.docstatus != 1:
+		frappe.throw(_("{0} must be submitted before a Debit Note can be made against it.").format(name))
+	if not cstr(original.get("fbr_invoice_no") or "").strip():
+		frappe.throw(_("{0} has no FBR invoice number yet.").format(name))
+
+	draft = frappe.copy_doc(original, ignore_no_copy=False)
+	draft.fbr_invoice_no = ""
+	draft.qr_code_data = ""
+	draft.qr_code = ""
+	draft.sandbox_run_status = ""
+	draft.fbr_payload_hash = ""
+	draft.amended_from = ""
+	draft.invoice_type = "Debit Note"
+	draft.return_against = name
+	draft.fbr_environment = original.fbr_environment
+	draft.insert()
+	return draft.name

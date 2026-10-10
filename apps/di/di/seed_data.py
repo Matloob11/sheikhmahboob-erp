@@ -79,18 +79,17 @@ DI_ERROR_CODES = [
 
 
 def seed_hs_uoms():
+	"""Insert/refresh curated HS UOM rows. Never delete FBR-synced names.
+
+	Deleting rows (or nulling ``HS Code.uom`` outside this list) fought
+	``sync_uoms`` / ``fetch_hs_code_uom`` and left live Tax Items pointing at
+	UOMs that no longer existed in the master — FBR error 0099.
+	"""
 	if not frappe.db.exists("DocType", "HS Uom"):
 		return {"inserted": 0, "updated": 0, "deleted": 0}
 
-	allowed = set(HS_UOMS)
 	inserted = 0
 	updated = 0
-	deleted = 0
-
-	for row in frappe.get_all("HS Uom", fields=["name"], limit_page_length=0):
-		if row.name not in allowed:
-			frappe.delete_doc("HS Uom", row.name, ignore_permissions=True, force=True)
-			deleted += 1
 
 	for idx, uom_name in enumerate(HS_UOMS, start=1):
 		if frappe.db.exists("HS Uom", uom_name):
@@ -113,18 +112,7 @@ def seed_hs_uoms():
 			doc.insert(ignore_permissions=True)
 			inserted += 1
 
-	if frappe.db.exists("DocType", "HS Code"):
-		frappe.db.sql(
-			"""
-			update `tabHS Code`
-			set uom = NULL
-			where ifnull(uom, '') != ''
-				and uom not in %(uoms)s
-			""",
-			{"uoms": tuple(HS_UOMS)},
-		)
-
-	return {"inserted": inserted, "updated": updated, "deleted": deleted}
+	return {"inserted": inserted, "updated": updated, "deleted": 0}
 
 
 HS_CODES_DIGEST_KEY = "di_hs_codes_digest"

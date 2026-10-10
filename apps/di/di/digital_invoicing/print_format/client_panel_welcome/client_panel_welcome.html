@@ -5,72 +5,134 @@
 	}
 
 	.print-format {
-		padding: 0.6in 0.7in !important;
+		padding: 0.45in 0.5in !important;
 	}
 
 	.cp-welcome {
 		box-sizing: border-box;
-		color: #1a1a1a;
-		font-family: Arial, Helvetica, sans-serif;
-		font-size: 13px;
+		border: 1.5px solid #111;
+		color: #111;
+		font-family: "Times New Roman", Times, serif;
+		font-size: 12.5px;
 		line-height: 1.45;
 		margin: 0 auto;
 		max-width: 720px;
+		padding: 22px 26px 18px;
 	}
 
-	.cp-welcome h1 {
-		color: #868A4A;
-		font-size: 22px;
-		margin: 0 0 8px;
+	.cp-welcome * {
+		box-sizing: border-box;
+	}
+
+	.cp-welcome .letterhead {
+		border-bottom: 2px solid #111;
+		margin-bottom: 18px;
+		padding-bottom: 14px;
+		text-align: center;
+	}
+
+	.cp-welcome .seal {
+		display: block;
+		height: 72px;
+		margin: 0 auto 8px;
+		width: 72px;
+	}
+
+	.cp-welcome .firm {
+		font-size: 20px;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		margin: 0;
+		text-transform: uppercase;
+	}
+
+	.cp-welcome .firm-sub {
+		font-size: 11px;
+		letter-spacing: 0.08em;
+		margin: 4px 0 0;
+		text-transform: uppercase;
+	}
+
+	.cp-welcome .doc-title {
+		font-size: 15px;
+		font-weight: 700;
+		letter-spacing: 0.12em;
+		margin: 0 0 6px;
+		text-align: center;
+		text-transform: uppercase;
 	}
 
 	.cp-welcome .sub {
-		color: #555;
-		margin-bottom: 24px;
+		color: #333;
+		font-size: 12px;
+		margin: 0 0 16px;
+		text-align: center;
 	}
 
 	.cp-welcome table.creds {
 		border-collapse: collapse;
+		margin: 10px 0 16px;
 		width: 100%;
 	}
 
 	.cp-welcome table.creds th,
 	.cp-welcome table.creds td {
-		border: 1px solid #cccccc;
-		padding: 10px 12px;
+		border: 1px solid #111;
+		padding: 9px 11px;
 		text-align: left;
 		vertical-align: top;
 	}
 
 	.cp-welcome table.creds th {
-		background: #868A4A;
-		color: #ffffff;
-		width: 34%;
+		background: #f2f2f2;
+		font-weight: 700;
+		width: 32%;
+	}
+
+	.cp-welcome .mono {
+		font-family: Consolas, "Courier New", monospace;
+		font-size: 12px;
 	}
 
 	.cp-welcome .note {
-		color: #444;
+		color: #222;
 		font-size: 12px;
-		margin-top: 22px;
+		margin: 0 0 22px;
+		text-align: justify;
+	}
+
+	.cp-welcome .footer {
+		border-top: 1px solid #111;
+		color: #333;
+		font-size: 10px;
+		margin-top: 28px;
+		padding-top: 8px;
+		text-align: center;
 	}
 </style>
 
 <div class="cp-welcome">
-	<h1>Digital Invoicing — Client Panel</h1>
+	<div class="letterhead">
+		<img class="seal" src="https://sheikhmahboob.com/files/smc-logo-bw.png" alt="Sheikh Mahboob &amp; Co." />
+		<p class="firm">Sheikh Mahboob &amp; Co.</p>
+		<p class="firm-sub">Tax · Corporate · Digital Invoicing — Lahore</p>
+	</div>
+
+	<p class="doc-title">Digital Invoicing — Client Panel</p>
 	<p class="sub">Keep this page. It has the login for {{ doc.full_name }}.</p>
 
 	<table class="creds">
 		<tr>
 			<th>Login URL</th>
-			<td>{{ doc.login_url or "" }}</td>
+			<td class="mono">{{ doc.login_url or "" }}</td>
 		</tr>
 		<tr>
 			<th>Email / Login</th>
-			<td>{{ doc.email or "" }}</td>
+			<td class="mono">{{ doc.email or "" }}</td>
 		</tr>
 		<tr>
 			<th>Password</th>
-			<td>{{ doc.get_welcome_password() }}</td>
+			<td class="mono">{{ doc.get_welcome_password() }}</td>
 		</tr>
 		<tr>
 			<th>Mode</th>
@@ -94,4 +156,8 @@
 		You will only see invoices, buyers and items for the assigned Seller / Company records.
 		HS codes, UOMs and FBR masters are shared.
 	</p>
+
+	<div class="footer">
+		Confidential — for the named client only · sheikhmahboob.com
+	</div>
 </div>

@@ -231,3 +231,24 @@ into connect and read so a slow FBR is not mistaken for an unreachable one.
 | P2 — reliability | 2.6 retry queue, alerts on failure, 2.5 HS UOM on demand, 2.4 settings lookup |
 | P3 — usability | 4.1 setup checklist, 4.2 error translation, 4.3 SRO dropdowns, 4.4 validate gate |
 | P4 — visibility | reports, dashboard, submission tracker, bulk posting |
+
+---
+
+## 6. Audit follow-up — 2026-10-07 / fixes on `di-fixes` (2026-10-09)
+
+Read-only production audit (15 DI Settings, 231 Sale Tax Invoices, Custom DocPerm
+mode on 12 doctypes, broken `run_reference_sync` ImportError, dead SRO Item rows,
+UOM seed fighting FBR sync, unguarded whitelisted post/validate). Work on branch
+`di-fixes` addressed:
+
+| Area | Fixed in |
+|---|---|
+| Whitelisted post/validate/resync + second-filing hole; filed-field permlevel/`no_copy`; panel create/stored-seller; seller FBR context | P0-1 |
+| `frappe.get_attr` for background reference sync | P0-2 |
+| Durable DI Log + `db.commit` before throw; `fbr_payload_hash` freeze; filed-draft alerts | P0-3 |
+| Scenario sandbox-only, Debit Note, editable `sale_type`, UOM seed/fetch_if_empty, SRO schedule on items, buyer FBR verify, ERPNext print/typo, province/DI Log/setup/escape hygiene | P1-* (see `ops/DI-FIX-REPORT.md`) |
+| Site-less CI job, archive `_tmp_*`, push-app backups | T1 / T2 / H1 |
+
+Still for Matloob on the VPS: `ops/SERVER-CHECKLIST-2026-10.md` (deploy order,
+token Version purge, SSH hardening, backups, 2FA). Do not re-run archived
+`ops/archive/2026-10-tmp/` scripts.

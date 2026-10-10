@@ -76,6 +76,15 @@ function apply_suggested_selection(listview, suggested) {
 		write_selection(suggested);
 		return true;
 	}
+	// Panel default is Production: upgrade stale Sandbox / blank session picks.
+	if (
+		suggested.environment === "Production" &&
+		current.company === suggested.company &&
+		current.environment !== "Production"
+	) {
+		write_selection(suggested);
+		return true;
+	}
 	if (current.environment || current.company === suggested.company) {
 		return false;
 	}
@@ -264,6 +273,7 @@ function load_invoice_picker(listview, selection) {
 			const message = response.message || {};
 			const companies = message.companies || [];
 			listview.__di_picker_cache = companies;
+			listview.__di_panel_user = Boolean(message.panel_user);
 			if (apply_suggested_selection(listview, message.default_selection || {})) {
 				render_invoice_picker(listview);
 				return;
@@ -281,6 +291,12 @@ function paint_invoice_picker(listview, companies, selection) {
 	const $host = picker_host(listview).removeAttr("hidden");
 
 	if (selection.company) {
+		// Client panel: skip Sandbox/Production choice — Production only.
+		if (listview.__di_panel_user) {
+			write_selection({ company: selection.company, environment: "Production" });
+			render_invoice_picker(listview);
+			return;
+		}
 		const company = companies.find((row) => row.name === selection.company) || {
 			name: selection.company,
 			sandbox: 0,
@@ -312,7 +328,13 @@ function paint_invoice_picker(listview, companies, selection) {
 		});
 	});
 	$cards.on("click", function () {
-		write_selection({ company: $(this).data("company") });
+		const company = $(this).data("company");
+		if (listview.__di_panel_user) {
+			write_selection({ company, environment: "Production" });
+			render_invoice_picker(listview);
+			return;
+		}
+		write_selection({ company });
 		paint_invoice_picker(listview, companies, read_selection());
 	});
 }

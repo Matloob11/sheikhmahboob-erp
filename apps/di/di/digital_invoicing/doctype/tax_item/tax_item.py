@@ -25,7 +25,48 @@ class TaxItem(Document):
 		transaction_type: DF.Link | None
 	# end: auto-generated types
 
-	pass
+	def validate(self):
+		from di.integrations.reference_api import _ensure_hs_uom
+
+		name = cstr(self.get("product_description") or getattr(self, "name", None) or "")
+		if "<" in name or ">" in name:
+			frappe.throw(_("Product description cannot contain < or >."))
+
+		uom = cstr(self.get("product_uom") or "").strip()
+		if uom:
+			if self.is_new() or self.has_value_changed("product_uom"):
+				if not frappe.db.exists("HS Uom", uom):
+					frappe.throw(_("Product UOM {0} is not in HS Uom.").format(uom))
+			elif not frappe.db.exists("HS Uom", uom):
+				# Unchanged value left behind when seed used to delete FBR UOMs.
+				_ensure_hs_uom(uom)
+
+		tax_desc = cstr(self.get("tax_desc") or "").strip()
+		if not tax_desc:
+			frappe.throw(_("Tax description (tax_desc) is required."))
+		# Plain percentages like "18%" must match rate_in_p.
+		if tax_desc.endswith("%") and tax_desc[:-1].replace(".", "", 1).isdigit():
+			expected = float(tax_desc[:-1])
+			if abs(float(self.get("rate_in_p") or 0) - expected) > 0.0001:
+				frappe.throw(
+					_("rate_in_p ({0}) must equal tax_desc percentage {1}.").format(
+						self.get("rate_in_p"), tax_desc
+					)
+				)
+
+
+@frappe.whitelist()
+def refresh_product_uom_from_fbr(name):
+	"""Refresh this Tax Item's product_uom from FBR; update HS Code.uom only with write."""
+	doc = frappe.get_doc("Tax Item", name)
+	frappe.has_permission("Tax Item", "write", doc=doc, throw=True)
+	from di.integrations.reference_api import fetch_hs_code_uom
+
+	uom = fetch_hs_code_uom(doc.hs_code, seller=doc.seller, force=True)
+	if not uom:
+		frappe.throw(_("FBR returned no UOM for HS Code {0}.").format(doc.hs_code))
+	doc.db_set("product_uom", uom, update_modified=False)
+	return {"product_uom": uom}
 
 
 @frappe.whitelist()
@@ -126,9 +167,13 @@ def get_tax_rate_details(
 	transaction_type=None,
 	company=None,
 	date=None,
+	seller=None,
 ):
 	"""Fetch the current FBR rate for the selected item context."""
 	from di.integrations.reference_api import _get_company_province_code, get_sale_type_rates
+	from di.integrations.seller_credentials import resolve_seller_arg, seller_fbr_context
+
+	frappe.has_permission("Tax Item", "write", throw=True)
 
 	if not hs_code:
 		frappe.throw(_("HS Code is required before fetching tax rate."))
@@ -143,12 +188,23 @@ def get_tax_rate_details(
 			)
 		)
 
-	origin = _get_company_province_code(company)
+	seller_name = resolve_seller_arg(seller=seller, company=company)
+	rate_token = None
+	if seller_name:
+		rate_token, origin, _annexure = seller_fbr_context(seller_name)
+		rate_company = seller_name
+	else:
+		from di.integrations.reference_api import _guard_reference_access
+
+		_guard_reference_access()
+		origin = _get_company_province_code(company)
+		rate_company = company
 	rate_rows = get_sale_type_rates(
 		date=date,
 		trans_type_id=transaction["transaction_type_id"],
 		origination_supplier=origin,
-		company=company,
+		company=rate_company,
+		token=rate_token,
 	)
 	options = [_normalise_rate_row(row) for row in rate_rows]
 	options = [row for row in options if row.get("tax_desc")]

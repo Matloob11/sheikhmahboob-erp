@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import time
 
 import frappe
 from frappe import _
@@ -26,6 +27,15 @@ FBR_SCENARIO_PATHS = (
 	"/di_data/v1/di/getscenarios",
 	"/pdi/v2/scenariolist",
 )
+# These paths are undocumented. A silent FBR used to hold each one for the
+# normal 30s read wait, three times, inside the button that opens the dialog.
+# Nginx cuts the desk at 120s and the user only sees "Request Timed Out".
+SCENARIO_LIST_TIMEOUT = (3, 5)
+# SN017 tries several petroleum rates. The whole attempt, including the one
+# real post, has to finish before that same 120s desk limit.
+FED_ST_PROBE_BUDGET_SECONDS = 50
+FED_ST_VALIDATE_TIMEOUT = (5, 8)
+RATE_LOOKUP_TIMEOUT = (3, 6)
 
 # sale type -> (tax_desc, rate_in_p, hs_code, uom, fixed_rs)
 ITEM_DEFAULTS = {
@@ -360,7 +370,9 @@ def fed_st_probe_candidates(company: str | None = None) -> list[tuple[str, str, 
 				tid = frappe.db.get_value("Transaction Type", trans, "transaction_type_id")
 				if not tid:
 					continue
-				for row in get_sale_type_rates(trans_type_id=tid, company=company) or []:
+				for row in get_sale_type_rates(
+				trans_type_id=tid, company=company, timeout=RATE_LOOKUP_TIMEOUT
+			) or []:
 					add(row.get("ratE_DESC") or row.get("rate_DESC"), row.get("ratE_VALUE") or row.get("rate_VALUE"))
 		except Exception:
 			pass
@@ -422,13 +434,20 @@ def classify_token(token: str) -> str:
 
 
 def resolve_sandbox_environment(token: str, sync_mode: str) -> str:
-	"""Honor Sync Mode. Dummy probes are too noisy to override Sandbox."""
-	probed = classify_token(token)
-	if probed == "Invalid":
+	"""Honor Sync Mode without a dummy FBR call when Sandbox is already chosen.
+
+	classify_token posts a fake invoice just to see which host answers. That
+	call, plus the scenario-list lookup, used to run inside the desk request
+	that opens "Pending invoices". When FBR was slow the request died at 120
+	seconds and the desk showed "Request Timed Out" before the list appeared.
+	A blank token is still invalid. Production mode still probes.
+	"""
+	token = cstr(token).strip()
+	if not token:
 		return "Invalid"
 	if cstr(sync_mode) == "Sandbox":
 		return "Sandbox"
-	return probed
+	return classify_token(token)
 
 
 def _probe(url: str, token: str, context: str) -> str:
@@ -450,7 +469,12 @@ def try_fetch_fbr_scenarios(token: str) -> list[str] | None:
 	"""Best-effort. FBR does not document this; None means show the full list."""
 	for path in FBR_SCENARIO_PATHS:
 		try:
-			body = get(DI_BASE_URL + path, token, "sandbox scenario list")
+			body = get(
+				DI_BASE_URL + path,
+				token,
+				"sandbox scenario list",
+				timeout=SCENARIO_LIST_TIMEOUT,
+			)
 		except Exception:
 			continue
 		codes = _extract_scenario_codes(body)
@@ -931,6 +955,13 @@ def _submit_one(seller, settings, sn_no, description, sale_type, company, recipe
 	)
 	if name:
 		doc = frappe.get_doc("Sale Tax Invoice", name)
+		# A previous attempt can die after FBR has already numbered the invoice
+		# and before submit. Posting again would file a second sandbox invoice.
+		if cstr(doc.fbr_invoice_no):
+			if cint(doc.docstatus) == 0:
+				doc.submit()
+			doc.db_set("sandbox_run_status", "Already Successful", update_modified=False)
+			return doc
 		_apply_recipe_to_doc(doc, seller, settings, sn_no, sale_type, recipe)
 		doc.save(ignore_permissions=True)
 	else:
@@ -940,7 +971,7 @@ def _submit_one(seller, settings, sn_no, description, sale_type, company, recipe
 		)
 
 	_fill_sro_if_needed(doc, company)
-	if sn_no == "SN017":
+	if sn_no == "SN017" and not cstr(doc.fbr_invoice_no):
 		_probe_and_post_fed_st(doc, seller, sale_type, company)
 	try:
 		doc.submit()
@@ -964,6 +995,7 @@ def _probe_and_post_fed_st(doc, seller, sale_type, company):
 	that exact payload, then pin the Tax Item so the ERP row matches.
 	"""
 	from di.integrations.di_api import _is_valid_response, _make_request, _round_currency
+	from di.integrations.http import FBRUncertainError
 	from di.integrations.sale_tax_invoice_api import (
 		_apply_success,
 		_get_post_url,
@@ -978,8 +1010,14 @@ def _probe_and_post_fed_st(doc, seller, sale_type, company):
 	post_url = _get_post_url(doc)
 	qty = float(base["items"][0].get("quantity") or 1) or 1.0
 	value = float(base["items"][0].get("valueSalesExcludingST") or 100) or 100.0
+	# Leave the desk's 120s limit enough room for this one post. A validate
+	# that never answers is abandoned; a post that never answers is not, because
+	# FBR may already have the invoice.
+	deadline = time.monotonic() + FED_ST_PROBE_BUDGET_SECONDS
 
 	for hs, uom, tax_desc, rate_in_p in fed_st_probe_candidates(company):
+		if time.monotonic() >= deadline:
+			break
 		sales_tax = value * float(rate_in_p) / 100 + float(extra_rupees_per_qty(tax_desc)) * qty
 		payload = copy.deepcopy(base)
 		payload["items"][0].update(
@@ -993,13 +1031,21 @@ def _probe_and_post_fed_st(doc, seller, sale_type, company):
 			}
 		)
 		try:
-			validated = _make_request(validate_url, payload, token)
+			validated = _make_request(
+				validate_url,
+				payload,
+				token,
+				context="SN017 validate",
+				timeout=FED_ST_VALIDATE_TIMEOUT,
+			)
 		except Exception:
 			continue
 		if not _is_valid_response(validated):
 			continue
 		try:
-			response = _make_request(post_url, payload, token)
+			response = _make_request(post_url, payload, token, context="SN017 post")
+		except FBRUncertainError:
+			raise
 		except Exception:
 			continue
 		invoice_number = cstr(response.get("invoiceNumber") or "").strip()

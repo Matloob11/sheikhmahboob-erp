@@ -238,6 +238,28 @@ Every post or validation writes a **DI Log** (request / response / status). Succ
 
 ---
 
+## AI Assistant (drafts from plain language)
+
+The **AI Assistant** is a side panel on every desk page (the "AI Assistant" button at the top
+of a page opens it; it stays open while you move between invoices, buyers and items, and it
+minimises to a small tab on the right edge instead of closing). It turns a request such as *"SUBHAN ENTERPRISES ki
+University of Education ko 3 water filters @ 4500 ki invoice banao"* into a **draft** Sale Tax
+Invoice. It finds or creates the buyer and the Tax Item, looks the HS code, UOM and rate up (FBR
+reference data with the seller's own token), derives the scenario and saves the draft. It never
+submits and never posts: a person opens the draft and presses Submit. The old page route
+`/desk/di-ai-assistant` just opens the panel.
+
+- Users: System Managers (all sellers) and Client Panel users (their own sellers, Production
+  only). The demo login sees the page but cannot chat.
+- Setup: put the OpenAI key in `site_config.json` with `./ops/set-openai-key.sh <file>` (or on
+  **DI AI Settings → OpenAI API Key**), tick **Enable AI Assistant**, press **Test connection**.
+  Model, fallbacks, reasoning effort, turn budget and the daily per-user cap are on the same form.
+- Limits: one turn per user at a time, at most `gunicorn_workers - 1` turns site-wide (override with
+  `di_ai_max_concurrent_turns` in site config), 75 s per turn, a daily per-user cap, and per-turn caps
+  on writes, validations and FBR lookups.
+- Design, tool catalogue, limits and security notes: [`di/ai/DESIGN.md`](di/ai/DESIGN.md).
+- Tests: `di/tests/test_ai_*.py` (site-less; on Windows run them through `ops/run-tests-wsl.sh`).
+
 ## Sandbox vs production
 
 | | Sandbox | Production |

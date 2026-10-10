@@ -107,3 +107,12 @@ class TestFBRErrorClassification(unittest.TestCase):
 	def test_success_returns_the_body(self):
 		result, _call = self._call(return_value=FakeResponse(200, body={"invoiceNumber": "ABC"}))
 		self.assertEqual(result, {"invoiceNumber": "ABC"})
+
+	def test_short_timeout_is_passed_through(self):
+		"""A lookup must be able to give up before the desk's 120 second limit."""
+		with patch.object(http.time, "sleep", return_value=None):
+			with patch.object(
+				http.requests, "request", return_value=FakeResponse(200, body={"ok": 1})
+			) as call:
+				http.get("https://example.invalid", "token", "list", timeout=(3, 5))
+		self.assertEqual(call.call_args.kwargs["timeout"], (3, 5))

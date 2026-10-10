@@ -53,6 +53,11 @@ def alert_unposted_invoices():
 			if _alert(doctype, name):
 				alerted += 1
 
+	for name in _pending_filed_drafts(cutoff):
+		found += 1
+		if _alert_filed_draft(name):
+			alerted += 1
+
 	if alerted:
 		frappe.db.commit()
 
@@ -86,6 +91,23 @@ def _pending(doctype, posted_field, date_field, cutoff):
 	)
 
 
+def _pending_filed_drafts(cutoff):
+	"""Draft Sale Tax Invoices that already carry an FBR number (post succeeded, submit did not)."""
+	if not frappe.db.exists("DocType", "Sale Tax Invoice"):
+		return []
+	return frappe.get_all(
+		"Sale Tax Invoice",
+		filters={
+			"docstatus": 0,
+			"fbr_invoice_no": ["not in", ["", None]],
+			"invoice_date": [">=", cutoff],
+			"modified": ["<", frappe.utils.add_to_date(None, hours=-QUIET_HOURS)],
+		},
+		pluck="name",
+		limit_page_length=0,
+	)
+
+
 def _alert(doctype, name):
 	"""Notify once per document. Returns True if a notification was created."""
 	subject = _("Not filed with FBR: {0} {1}").format(doctype, name)
@@ -95,8 +117,8 @@ def _alert(doctype, name):
 		return False
 
 	message = _(
-		"{0} {1} is submitted but has no FBR invoice number. Open DI Log to see what FBR "
-		"reported, then use Post to FBR once the cause is fixed.<br><br>"
+		"{0} {1} is submitted but has no FBR invoice number. Open DI Log for this document "
+		"to see what FBR reported, then use Post to FBR once the cause is fixed.<br><br>"
 		"It is not re-sent automatically: if the earlier attempt timed out, FBR may already "
 		"hold this invoice, and filing it twice cannot be undone."
 	).format(doctype, name)
@@ -110,6 +132,36 @@ def _alert(doctype, name):
 				"subject": subject,
 				"email_content": message,
 				"document_type": doctype,
+				"document_name": name,
+			}
+		).insert(ignore_permissions=True)
+
+	return True
+
+
+def _alert_filed_draft(name):
+	subject = _("Filed with FBR but still draft: Sale Tax Invoice {0}").format(name)
+	if frappe.db.exists(
+		"Notification Log",
+		{"document_type": "Sale Tax Invoice", "document_name": name, "subject": subject},
+	):
+		return False
+
+	message = _(
+		"Sale Tax Invoice {0} already has an FBR invoice number but is still a draft. "
+		"Open the document and Submit it as-is (do not edit lines). "
+		"Open DI Log for this document to see what FBR reported."
+	).format(name)
+
+	for user in _alert_recipients():
+		frappe.get_doc(
+			{
+				"doctype": "Notification Log",
+				"for_user": user,
+				"type": "Alert",
+				"subject": subject,
+				"email_content": message,
+				"document_type": "Sale Tax Invoice",
 				"document_name": name,
 			}
 		).insert(ignore_permissions=True)
@@ -144,10 +196,9 @@ def run_reference_sync(dotted_path, label, user, **kwargs):
 	on completion". Nothing notified anyone: a sync could fail against FBR and
 	the only trace was an Error Log nobody reads.
 	"""
-	from frappe.utils import get_attr
-
 	try:
-		result = get_attr(dotted_path)(**kwargs)
+		# Frappe 16 exposes get_attr on frappe, not frappe.utils (ImportError in Error Log).
+		result = frappe.get_attr(dotted_path)(**kwargs)
 		message = (result or {}).get("message") if isinstance(result, dict) else None
 		_notify_user(
 			user,
@@ -185,6 +236,6 @@ def _notify_user(user, subject, message):
 def count_unposted():
 	"""Small helper for dashboards and tests."""
 	cutoff = add_days(today(), -LOOKBACK_DAYS)
-	return cint(
-		sum(len(_pending(dt, posted, date_field, cutoff)) for dt, posted, date_field in TARGETS)
-	)
+	submitted = sum(len(_pending(dt, posted, date_field, cutoff)) for dt, posted, date_field in TARGETS)
+	return cint(submitted + len(_pending_filed_drafts(cutoff)))
+
