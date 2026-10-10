@@ -24,10 +24,11 @@ add_to_apps_screen = [
 # ------------------
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/di/css/di.css"
+app_include_css = "/assets/di/css/di_ai_panel.css?v=2026101001"
 app_include_js = [
 	"/assets/di/js/desk_sidebar_fix.js?v=20260812",
 	"/assets/di/js/doctype/tax_item_quick_entry.js?v=20260605",
+	"/assets/di/js/di_ai_panel.js?v=2026101001",
 ]
 
 # include js, css files in header of web template

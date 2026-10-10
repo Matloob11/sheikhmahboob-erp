@@ -1,7 +1,6 @@
 frappe.ui.form.on("DI AI Settings", {
 	refresh(frm) {
 		frm.add_custom_button(__("Test connection"), () => di_ai_test_connection(frm));
-		frm.add_custom_button(__("Open assistant"), () => frappe.set_route("di-ai-assistant"));
 		di_ai_render_usage(frm);
 	},
 });

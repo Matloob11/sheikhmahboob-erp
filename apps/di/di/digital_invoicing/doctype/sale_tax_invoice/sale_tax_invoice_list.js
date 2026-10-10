@@ -11,7 +11,6 @@ frappe.listview_settings["Sale Tax Invoice"] = {
 	},
 
 	onload(listview) {
-		listview.page.add_inner_button(__("AI Assistant"), () => frappe.set_route("di-ai-assistant"));
 		inject_invoice_picker_css();
 		bind_invoice_picker(listview);
 		patch_invoice_list_args(listview);

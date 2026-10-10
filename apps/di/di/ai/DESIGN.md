@@ -61,17 +61,26 @@ apps/di/di/digital_invoicing/doctype/
   di_ai_settings/      Single: enabled, model, fallbacks, effort, api_key (Password), limits
   di_ai_conversation/  one chat (owner = user), last_response_id, usage, linked draft
   di_ai_message/       child rows: user / assistant / tool / error messages
+apps/di/di/public/js/di_ai_panel.js + public/css/di_ai_panel.css
+                       the side panel on every desk page (chat engine + drawer + page-head launcher)
 apps/di/di/digital_invoicing/page/di_ai_assistant/
-  di_ai_assistant.{json,js,css}   the chat page at /desk/di-ai-assistant
+  di_ai_assistant.{json,js}       the old page route; it only opens the panel
 apps/di/di/tests/test_ai_*.py     site-less tests (rules, hs_search ranking, client, tool schemas and
                                   pre-checks, assistant loop with a scripted client)
 ```
 
-Navigation: `di/navigation.py` now knows about Pages (`PAGE_LINKS`) and rebuilds the "AI
-Assistant" sidebar item and workspace shortcut on every migrate; the same item is in
-`di/workspace_sidebar/digital_invoicing.json`. The Sale Tax Invoice list has an "AI Assistant"
-inner button. (An "Ask AI" button on the invoice form waits for the parallel `di-fixes` work,
-which is changing `sale_tax_invoice.js`.)
+Navigation: an "AI Assistant" launcher is prepended to the `.page-actions` of every page head
+(on `page-change`, and on `form-load` / `form-refresh` because a form builds its head after
+`page-change`), so there is no sidebar item or workspace shortcut (`PAGE_LINKS` is empty, and
+`DI AI Conversation` is kept out of the auto-built sidebar). The old route `/desk/di-ai-assistant`
+only calls `di.ai.open()`. Layout: at 1200 px and wider the panel is a flex child of `<body>` next
+to `.main-section`, so the page shrinks rather than being covered (and "Wider" widens it); from
+768 to 1199 px it slides over the right side of the page; below 768 px it takes the screen, and
+opening a draft from it minimises it. Open / minimised / wider state and the current conversation
+are kept in `localStorage` per site and user, and the stored conversation is reopened only when it
+is among the user's recent ones. Minimising keeps the chat alive: a small tab on the right edge
+shows the running step and an unread dot when the reply lands (no toast, which would sit on the
+tab). Escape minimises. System Managers get a settings button in the panel head.
 
 No new Python dependency: the OpenAI Responses API is called with `requests`.
 

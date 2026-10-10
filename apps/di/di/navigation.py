@@ -25,10 +25,13 @@ NAVIGATION_LINKS = [
 	("DI Error Codes", "DI Error Code", "Grey"),
 ]
 
-# Desk pages shipped by this app, shown right after Home.
-PAGE_LINKS = [
-	("AI Assistant", "di-ai-assistant", "Blue"),
-]
+# Desk pages shipped by this app, shown right after Home. The AI assistant is a side
+# panel with its own launcher on every page head (di/public/js/di_ai_panel.js), so it
+# is not listed here; its page route only redirects to the panel.
+PAGE_LINKS = []
+
+# DocTypes of the module that are records of the assistant, not something users browse.
+HIDDEN_DOCTYPES = {"DI AI Conversation"}
 
 
 def sync_digital_invoicing_navigation():
@@ -44,7 +47,7 @@ def sync_digital_invoicing_navigation():
 	links = [link for link in NAVIGATION_LINKS if link[1] in doctypes]
 	known_doctypes = {doctype for _label, doctype, _color in links}
 
-	for doctype in sorted(doctypes - known_doctypes):
+	for doctype in sorted(doctypes - known_doctypes - HIDDEN_DOCTYPES):
 		links.append((doctype, doctype, "Grey"))
 
 	_sync_workspace(links)
